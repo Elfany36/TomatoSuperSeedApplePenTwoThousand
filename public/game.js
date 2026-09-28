@@ -78,7 +78,10 @@ const state = {
   painting: false,
   lastPaintAt: 0,
   assetLoadToken: 0,
-  pendingAction: null
+  pendingAction: null,
+  pattern: "solid",
+  inspectLook: false,
+  inspectMoved: false
 };
 
 function apiSocketUrl() {
@@ -473,6 +476,7 @@ function normalizeMapAsset(root,targetWidth=38,targetDepth=28,targetHeight=10){
   return safeFit;
 }
 function loadMapForRound(round){
+  if(!state.scene) return;
   const requested = typeof round === "object"
     ? (round?.mapId ?? round?.map ?? round?.index ?? 1)
     : round;
@@ -486,7 +490,14 @@ function loadMapForRound(round){
   state.scene.fog.color.set(map.sky);
   $("mapLabel").textContent=map.label;
   const cached=state.assetCache.get(map.id);
-  if(cached){ attachMap(cached.scene,map.id); return; }
+  if(cached){
+    attachMap(cached.scene,map.id);
+    // The cached scene is cloned for rendering, so its mixer must be attached
+    // to the visible clone rather than the detached loader scene.
+    const visible=state.assetGroup.children[0];
+    if(visible) playGltfAnimations(visible,cached.animations||[],map.id);
+    return;
+  }
   if($("assetBtn"))$("assetBtn").innerHTML='<b>LOADING…</b>';
   const token=++state.assetLoadToken;
   const timeout=setTimeout(()=>{
@@ -496,12 +507,16 @@ function loadMapForRound(round){
     if($("assetBtn"))$("assetBtn").innerHTML='<b>FALLBACK</b>';
     toast(map.label+" asset timed out; fallback scene active.",3200);
   },12000);
-  new GLTFLoader().load(map.url,g=>{clearTimeout(timeout);
+  new GLTFLoader().load(map.url,g=>{
+    clearTimeout(timeout);
+    if(token!==state.assetLoadToken) return;
     state.assetCache.set(map.id,{scene:g.scene,animations:g.animations||[]});
-    playGltfAnimations(g.scene,g.animations||[],map.id);
     attachMap(g.scene,map.id);
+    const visible=state.assetGroup.children[0];
+    if(visible) playGltfAnimations(visible,g.animations||[],map.id);
     if($("bootStatus"))$("bootStatus").textContent=map.label+" environment loaded";
   },xhr=>{
+    if(token!==state.assetLoadToken) return;
     if($("bootStatus")&&xhr?.total)$("bootStatus").textContent=map.label+" "+Math.round(xhr.loaded/xhr.total*100)+"%";
   },()=>{clearTimeout(timeout);
     state.assetGroup.visible=false;
@@ -690,7 +705,7 @@ function makePlayerMesh(player) {
   const band=new THREE.Mesh(new THREE.TorusGeometry(.98,.035,8,40),new THREE.MeshBasicMaterial({color:player.role==="seeker"?"#FFD166":"#65E6BA",transparent:true,opacity:.9}));band.rotation.x=Math.PI/2;band.position.y=.16;group.add(band);
   const aura=new THREE.Mesh(new THREE.SphereGeometry(1.12,16,12),new THREE.MeshBasicMaterial({color:"#65E6BA",transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending}));aura.position.y=.9;group.add(aura);
   state.playerGroup.add(group);
-  const entry={group,mats:[skin,head.material,tail.material,tailTip.material,body.material],accent:shell,shell,shellDark,band,aura,nameSprite,target:new THREE.Vector3(player.x||0,0,player.z||0),lastX:player.x||0,lastZ:player.z||0,body,head,tail,legs,arms,feet,eyes,pupils,crest};
+  const entry={group,mats:[skin,head.material,tail.material,tailTip.material,body.material,shell.material],accent:shell,shell,shellDark,band,aura,nameSprite,target:new THREE.Vector3(player.x||0,0,player.z||0),lastX:player.x||0,lastZ:player.z||0,body,head,tail,legs,arms,feet,eyes,pupils,crest};
   state.players.set(player.id,entry);return entry;
 }
 function paintTexture(color,pattern){
@@ -718,7 +733,13 @@ function paintTexture(color,pattern){
 
 function setPlayerStyle(entry, player) {
   const color=player.role==="seeker"?"#8E7CFF":(player.color||"#FFFFFF");
-  entry.mats.forEach(mat=>{
+  const paintMats=[...entry.mats,entry.accent,entry.shell,entry.shellDark];
+  entry.arms?.forEach(x=>paintMats.push(x.material));
+  entry.legs?.forEach(x=>paintMats.push(x.material));
+  entry.feet?.forEach(x=>paintMats.push(x.material));
+  entry.belly?.forEach?.(x=>paintMats.push(x.material));
+  paintMats.forEach(mat=>{
+    if(!mat) return;
     mat.color.set("#FFFFFF");
     if(player.role!=="seeker") mat.map=paintTexture(color,player.pattern||"solid");
     else mat.map=null;
@@ -856,6 +877,10 @@ function updateRoom(room) {
     $("roughnessSlider").value=Math.round((self.roughness??.86)*100);
     $("roughnessValue").textContent=Math.round((self.roughness??.86)*100)+"%";
   }
+  state.pattern=self.pattern||"solid";
+  if(self.pattern){
+    document.querySelectorAll(".pattern-btn").forEach(b=>b.classList.toggle("active",b.dataset.pattern===self.pattern));
+  }
 
   if (room.phase === "setup" && self.role === "hider") {
     $("centerPrompt").textContent = "Click a colorful surface to paint · 1/2/3 pose · explore and hide";
@@ -992,7 +1017,7 @@ window.addEventListener("keydown", event => {
   if (event.code === "KeyR") cyclePose();
   if (event.code === "Space") {
     initAudio();
-    if(currentSelf()?.role==="hider" && state.room?.phase==="setup") sampleCenterSurface();
+    if(currentSelf()?.role==="hider" && state.room?.phase==="setup" && state.paintModeOpen) sampleCenterSurface();
     else state.hopUntil=performance.now()+280;
   }
   if (event.code === "ControlLeft" || event.code === "ControlRight") choosePose("crouch");
@@ -1002,7 +1027,12 @@ window.addEventListener("keydown", event => {
     state.cameraMode=state.cameraMode==="first"?"third":"first";
     toast("Camera: "+state.cameraMode.toUpperCase());
   }
-  if (event.code === "KeyF" && currentSelf()?.role==="hider" && state.room?.phase==="setup") { state.paintModeOpen=!state.paintModeOpen; $("camoPanel").hidden=!state.paintModeOpen; toast(state.paintModeOpen?"Paint mode ON":"Paint mode OFF"); }
+  if (event.code === "KeyF" && currentSelf()?.role==="hider" && state.room?.phase==="setup") {
+  state.paintModeOpen=!state.paintModeOpen;
+  state.painting=false; state.inspectLook=false; state.adjustBrush=false;
+  $("camoPanel").hidden=!state.paintModeOpen;
+  toast(state.paintModeOpen?"Paint mode ON":"Paint mode OFF");
+}
 });
 window.addEventListener("keyup", event => { keys[event.code] = false; });
 
@@ -1127,7 +1157,7 @@ function choosePose(pose) {
 }
 
 function sampleAtPointer(event) {
-  if (!state.room) return;
+  if (!state.room || !state.paintModeOpen) return;
   const self = currentSelf();
   if (!self || self.role !== "hider" || state.room.phase !== "setup") return;
 
@@ -1197,11 +1227,16 @@ function spotAtPointer(event) {
 }
 
 $("scene").addEventListener("pointerdown",event=>{
+  if(event.button===1 && currentSelf()?.role==="hider" && state.room?.phase==="setup" && state.paintModeOpen){
+    state.inspectLook=true; state.inspectMoved=false; initAudio(); return;
+  }
   if(event.button===2){
     if(currentSelf()?.role==="hider" && state.room?.phase==="setup"){state.adjustBrush=true;initAudio();return;}
     state.mouseLook=true;initAudio();return;
   }
-  if(event.button===1 && currentSelf()?.role==="hider" && state.room?.phase==="setup"){state.brushMode="dropper";$("dropperTool")?.classList.add("active");$("brushTool")?.classList.remove("active");sampleAtPointer(event);event.preventDefault();return;}
+  if(event.button===1 && currentSelf()?.role==="hider" && state.room?.phase==="setup" && state.paintModeOpen){
+    state.inspectLook=true; state.inspectMoved=false; initAudio(); return;
+  }
   if(event.button===0 && currentSelf()?.role==="seeker" && state.room?.phase==="search"){
     try{$("scene").requestPointerLock();}catch{}
   }
@@ -1215,6 +1250,15 @@ $("scene").addEventListener("pointerdown",event=>{
 
 window.addEventListener("pointerup",event=>{
   if(event.button===0) state.painting=false;
+  if(event.button===1 && state.inspectLook){
+    if(!state.inspectMoved && currentSelf()?.role==="hider" && state.room?.phase==="setup" && state.paintModeOpen){
+      state.brushMode="dropper";
+      $("dropperTool")?.classList.add("active");
+      $("brushTool")?.classList.remove("active");
+      sampleAtPointer(event);
+    }
+    state.inspectLook=false;
+  }
   if(event.button===2){state.adjustBrush=false;state.mouseLook=false;}
 });
 $("scene").addEventListener("wheel",event=>{
@@ -1235,6 +1279,12 @@ window.addEventListener("pointermove",event=>{
       state.brushSize=Math.max(1,Math.min(5,state.brushSize+(event.movementX>0?1:-1)));
       document.querySelectorAll(".size-btn").forEach(b=>b.classList.toggle("active",Number(b.dataset.size)===state.brushSize));
     }
+    return;
+  }
+  if(state.inspectLook){
+    if(Math.abs(event.movementX)+Math.abs(event.movementY)>2) state.inspectMoved=true;
+    state.input.yaw+=event.movementX*0.0045;
+    state.pitch=Math.max(-1.1,Math.min(0.55,state.pitch-event.movementY*0.0032));
     return;
   }
   if(state.pointerLocked||state.mouseLook){
