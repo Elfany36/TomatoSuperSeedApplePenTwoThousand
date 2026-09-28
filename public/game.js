@@ -684,7 +684,8 @@ function escapeHtml(value) {
   }[char]));
 }
 
-function MAP_KEYS_INDEX_FOR(id){const i=MAPS.findIndex(m=>m.id===id);return i+1;}\nfunction formatMs(ms) {
+function MAP_KEYS_INDEX_FOR(id){const i=MAPS.findIndex(m=>m.id===id);return i+1;}
+function formatMs(ms) {
   const total = Math.max(0, Math.ceil(ms / 1000));
   const min = Math.floor(total / 60);
   const sec = String(total % 60).padStart(2, "0");
