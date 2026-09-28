@@ -57,6 +57,7 @@ const state = {
   assetCache: new Map(),
   mixers: [],
   mixerCache: new Map(),
+  paintTextureCache: new Map(),
   adjustBrush: false,
   hopUntil: 0,
   scanCooldownUntil: 0,
@@ -601,12 +602,38 @@ function makePlayerMesh(player) {
   return entry;
 }
 
+function paintTexture(color,pattern){
+  const key=color+"|"+(pattern||"solid");
+  if(state.paintTextureCache.has(key)) return state.paintTextureCache.get(key);
+  const size=48, canvas=document.createElement("canvas"); canvas.width=canvas.height=size;
+  const ctx=canvas.getContext("2d");
+  ctx.fillStyle=color; ctx.fillRect(0,0,size,size);
+  if(pattern==="bands"){
+    ctx.globalAlpha=.18; ctx.fillStyle="#ffffff";
+    for(let y=0;y<size;y+=12) ctx.fillRect(0,y,size,4);
+  }else if(pattern==="edge"){
+    ctx.globalAlpha=.25; ctx.strokeStyle="#ffffff"; ctx.lineWidth=5; ctx.strokeRect(2.5,2.5,size-5,size-5);
+  }else if(pattern==="dither"){
+    ctx.globalAlpha=.16; ctx.fillStyle="#ffffff";
+    for(let y=3;y<size;y+=8) for(let x=(y%16)/2;x<size;x+=8) ctx.fillRect(x,y,2,2);
+  }
+  ctx.globalAlpha=1;
+  const tex=new THREE.CanvasTexture(canvas);
+  tex.colorSpace=THREE.SRGBColorSpace;
+  tex.wrapS=tex.wrapT=THREE.RepeatWrapping;
+  state.paintTextureCache.set(key,tex);
+  return tex;
+}
+
 function setPlayerStyle(entry, player) {
   const color=player.role==="seeker"?"#8E7CFF":(player.color||"#FFFFFF");
   entry.mats.forEach(mat=>{
-    mat.color.set(color);
+    mat.color.set("#FFFFFF");
+    if(player.role!=="seeker") mat.map=paintTexture(color,player.pattern||"solid");
+    else mat.map=null;
     if(player.metallic!=null) mat.metalness=player.metallic;
     if(player.roughness!=null) mat.roughness=player.roughness;
+    mat.needsUpdate=true;
   });
   entry.accent.color.set(player.role==="seeker"?"#CEC7FF":"#DDEBE6");
   entry.band.material.color.set(player.found?"#FF667D":player.role==="seeker"?"#FFD166":"#65E6BA");
