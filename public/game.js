@@ -953,6 +953,12 @@ function updateInput(nowTime) {
 
   const keysInput = getKeyboardAxes();
   const pad = pollGamepad();
+  const sprintKey = key("ShiftLeft") || key("ShiftRight");
+  const movingInput = Math.hypot(keysInput.forward, keysInput.strafe) > 0.05;
+  if (sprintKey && movingInput && state.stamina > 0) state.stamina = Math.max(0, state.stamina - 28 * (1/60));
+  else state.stamina = Math.min(100, state.stamina + 18 * (1/60));
+  $("staminaValue").textContent = Math.round(state.stamina) + "%";
+  $("staminaFill").style.width = Math.round(state.stamina) + "%";
   let forward = keysInput.forward;
   let strafe = keysInput.strafe;
   if (pad && (Math.abs(pad.forward) + Math.abs(pad.strafe) > 0.08)) {
@@ -979,7 +985,7 @@ function updateInput(nowTime) {
   if (nowTime - state.lastSentInput.t > 60 ||
       x !== state.lastSentInput.x || z !== state.lastSentInput.z ||
       Math.abs(state.input.yaw - state.lastSentInput.yaw) > 0.03) {
-    send({ type: "input", x, z, yaw: state.input.yaw });
+    send({ type: "input", x, z, yaw: state.input.yaw, sprint: !!sprintKey && state.stamina > 0 });
     state.lastSentInput = { x, z, yaw: state.input.yaw, t: nowTime };
   }
 }
