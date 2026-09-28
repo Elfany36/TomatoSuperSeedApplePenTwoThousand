@@ -709,7 +709,7 @@ function makePlayerMesh(player) {
     skin,head.material,tail.material,tailTip.material,body.material,
     shell,shellDark,belly.material,shellTop.material,snout.material,jaw.material,
     ...arms.map(x=>x.material),...legs.map(x=>x.material),...feet.map(x=>x.material),
-    ...eyes.map(x=>x.material),...pupils.map(x=>x.material),...crest.map(x=>x.material)
+    ...crest.map(x=>x.material)
   ],accent:shell,shell,shellDark,band,aura,nameSprite,target:new THREE.Vector3(player.x||0,0,player.z||0),lastX:player.x||0,lastZ:player.z||0,body,head,tail,legs,arms,feet,eyes,pupils,crest};
   state.players.set(player.id,entry);return entry;
 }
