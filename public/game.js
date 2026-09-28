@@ -312,6 +312,11 @@ function ensureScene() {
   fill.position.set(18, 12, -10);
   state.scene.add(fill);
 
+  // Always preload the default environment as soon as the renderer exists.
+  // This makes the game visually useful before a round starts and removes
+  // the need to manually choose/upload a map for normal play.
+  loadMapForRound({ mapId: state.assetKey || "grove" });
+
   state.worldGroup = new THREE.Group();
   state.assetGroup = new THREE.Group();
   state.playerGroup = new THREE.Group();
@@ -970,6 +975,17 @@ window.addEventListener("keyup", event => { keys[event.code] = false; });
 $("privateBtn").addEventListener("click", () => createRoom(false));
 $("publicBtn").addEventListener("click", () => createRoom(true));
 $("joinBtn").addEventListener("click", joinRoom);
+
+// Give clear feedback instead of making disconnected buttons appear dead.
+function guardConnection(action) {
+  if (state.socket?.readyState === WebSocket.OPEN) return true;
+  toast("Connecting to game server…", 1800);
+  connect();
+  return false;
+}
+$("privateBtn").addEventListener("click", () => { if (guardConnection()) createRoom(false); });
+$("publicBtn").addEventListener("click", () => { if (guardConnection()) createRoom(true); });
+$("joinBtn").addEventListener("click", () => { if (guardConnection()) joinRoom(); });
 $("code").addEventListener("keydown", event => {
   if (event.key === "Enter") joinRoom();
 });
@@ -1007,7 +1023,14 @@ $("playAgain")?.addEventListener("click", () => {
   else toast("Only the host can start the next round.");
 });
 
-$("assetBtn")?.addEventListener("click",()=>toast("Map rotation is synchronized to the round."));
+$("assetBtn")?.addEventListener("click",()=>{
+  const index=Math.max(0,MAPS.findIndex(m=>m.id===state.assetKey));
+  const next=MAPS[(index+1)%MAPS.length];
+  state.assetKey=next.id;
+  ensureScene();
+  loadMapForRound({mapId:next.id});
+  toast("Loading "+next.label+"…",1600);
+});
 $("metallicSlider")?.addEventListener("input",e=>{const v=Number(e.target.value)/100;$("metallicValue").textContent=Math.round(v*100)+"%";const s=currentSelf();if(s&&state.room?.phase==="setup")send({type:"customize",color:s.color,pose:s.pose,brushSize:state.brushSize,metallic:v,roughness:s.roughness??.86,pattern:s.pattern||"solid",surfaceId:"material"});});
 $("roughnessSlider")?.addEventListener("input",e=>{const v=Number(e.target.value)/100;$("roughnessValue").textContent=Math.round(v*100)+"%";const s=currentSelf();if(s&&state.room?.phase==="setup")send({type:"customize",color:s.color,pose:s.pose,brushSize:state.brushSize,metallic:s.metallic??.03,roughness:v,pattern:s.pattern||"solid",surfaceId:"material"});});
 document.querySelectorAll(".pattern-btn").forEach(btn=>btn.addEventListener("click",()=>{state.pattern=btn.dataset.pattern;document.querySelectorAll(".pattern-btn").forEach(b=>b.classList.toggle("active",b===btn));const s=currentSelf();if(s&&state.room?.phase==="setup")send({type:"customize",color:s.color,pose:s.pose,brushSize:state.brushSize,metallic:s.metallic??.03,roughness:s.roughness??.86,pattern:state.pattern,surfaceId:"pattern"});}));
