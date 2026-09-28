@@ -84,7 +84,7 @@ const hiderView = privacyRoom.stateFor(pHider.id);
 assert.equal(hiderView.clones.length, 1);
 
 privacyRoom.transitionToSearch();
-const clone=privacyRoom.allClones()[0];
+const clone=pHider.clones[0];
 const seekerForClone=[...privacyRoom.players.values()].find(p=>p.role==="seeker");
 clone.x=seekerForClone.x;
 clone.z=seekerForClone.z-0.75;
