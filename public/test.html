@@ -122,7 +122,7 @@ async function run(){
   const existing=gameHooks.filter(id=>document.getElementById(id));
   row("Game HUD in test document", "warn", existing.length?existing.join(", "):"expected HUD is intentionally not duplicated here; test page is isolated"); 
   log("Completed: "+pass+" passed, "+fail+" failed.");
-  $("summary").innerHTML=fail?'<span class="fail">'+pass+" passed / "+fail+" failed</span>":'<span class="pass">All "+pass+" smoke tests passed.</span>';
+  $("summary").innerHTML=fail?'<span class="fail">'+pass+" passed / "+fail+" failed</span>":'<span class="pass">All '+pass+' smoke tests passed.</span>';
 }
 $("mapFile").addEventListener("change",e=>{
   const f=e.target.files[0];
