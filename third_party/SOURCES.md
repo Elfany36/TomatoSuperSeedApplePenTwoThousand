@@ -6,6 +6,8 @@ This project follows the authorized direct-reuse directive supplied for the Mecc
 - MECCHA CHAMELEON game/cooked assets in this repository: semantic/source-of-truth evidence; proprietary binaries are not treated as open-source assets.
 - c0re-i5/meccha-chameleon-modkit-guide: developer/mod-kit workflow reference and supplied mod-kit resources.
 - The Player / Meccha Chameleon model-resource page supplied for model inspection.
+- Mecchachameleon 3D models — Sketchfab tag supplied by the project owner: https://sketchfab.com/tags/mecchachameleon (visual/model reference only; individual model licenses must be checked before redistribution).
+- MECCHA CHAMELEON Controls / Paint reference pages supplied and searched for current input/paint behavior; used as gameplay-reference material, not as a substitute for the game's proprietary implementation.
 
 ## Reusable gameplay/networking sources
 - twalkerallenii-spec/hide-and-seek-arena — browser/Three.js multiplayer architecture, server authority, room lifecycle, interpolation, controller and validation patterns. License: MIT.
