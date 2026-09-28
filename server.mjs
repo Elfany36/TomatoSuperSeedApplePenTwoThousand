@@ -30,6 +30,8 @@ const PLAYER_RADIUS = 0.62;
 const SPOT_RANGE = 7.0;
 const SPOT_COOLDOWN_MS = 650;
 const STEP_INTERVAL_MS = 420;
+const SPOT_HALF_FOV = 35 * Math.PI / 180;
+const SPOT_MIN_DOT = Math.cos(SPOT_HALF_FOV);
 
 const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 const now = () => Date.now();
@@ -375,7 +377,7 @@ export class GameRoom {
     const forwardX = Math.sin(seeker.yaw);
     const forwardZ = Math.cos(seeker.yaw);
     const dot = (dx * forwardX + dz * forwardZ) / (distance || 1);
-    if (dot < -0.15) return { ok: false, reason: "wrong_direction", x: target.x, z: target.z };
+    if (dot < SPOT_MIN_DOT) return { ok: false, reason: "wrong_direction", x: target.x, z: target.z };
 
     target.found = true;
     seeker.score += 3;
@@ -554,7 +556,7 @@ export class GameManager {
     if (player.ws === ws) player.ws = null;
     player.connected = false;
     player.disconnectedAt = now();
-    player.input = { x: 0, z: 0 };
+    player.input = { x: 0, z: 0, sprint: false };
   }
 
   send(player, message) {
