@@ -142,8 +142,13 @@ export class GameRoom {
     this.players = new Map();
     this.phase = "lobby";
     this.round = 0;
+    this.roundId = null;
+    this.completed = false;
+    this.winnerRole = null;
+    this.endReason = null;
     this.endAt = 0;
     this.roundStartedAt = 0;
+    this.endedAt = null;
     this.roundStats = [];
     this.lastBroadcast = 0;
     this.createdAt = now();
@@ -187,7 +192,13 @@ export class GameRoom {
   startRound() {
     const players = this.activePlayers();
     if (players.length < CONFIG.MIN_PLAYERS) throw new Error("Need at least 2 players");
+    if (this.phase !== "lobby" && this.phase !== "results") throw new Error("Round already running");
     this.round += 1;
+    this.roundId = randomUUID();
+    this.completed = false;
+    this.winnerRole = null;
+    this.endReason = null;
+    this.endedAt = null;
     const seekerCount = Math.max(1, Math.floor(players.length / 4));
     const ordered = players.slice().sort((a, b) => a.joinOrder - b.joinOrder);
     const offset = (this.round - 1) % ordered.length;
@@ -226,6 +237,7 @@ export class GameRoom {
     this.endAt = this.roundStartedAt + CONFIG.SETUP_MS;
     this.roundStats = [];
     this.roundReason = "";
+
   }
 
   transitionToSearch() {
@@ -243,7 +255,11 @@ export class GameRoom {
   }
 
   finish(winnerRole, reason) {
-    if (this.phase === "results") return;
+    if (this.phase !== "search" || this.completed) return;
+    this.completed = true;
+    this.winnerRole = winnerRole;
+    this.endReason = reason;
+    this.endedAt = now();
     const hiders = [...this.players.values()].filter(p => p.role === "hider");
     const seekers = [...this.players.values()].filter(p => p.role === "seeker");
     const roundStats = [];
@@ -418,6 +434,12 @@ export class GameRoom {
       hostId: this.hostId,
       phase: this.phase,
       round: this.round,
+      roundId: this.roundId,
+      completed: this.completed,
+      winner: this.winnerRole,
+      endReason: this.endReason,
+      startedAt: this.roundStartedAt || null,
+      endedAt: this.endedAt,
       leftMs: Math.max(0, this.endAt - now()),
       players,
       roundStats: this.roundStats,
@@ -633,6 +655,19 @@ export class GameManager {
       return;
     }
 
+    if (parsed.type === "rematch") {
+      try {
+        if (room.hostId !== current.id) throw new Error("Only the room host can rematch");
+        if (room.phase !== "results") throw new Error("The round is not complete yet");
+        if (room.activePlayers().length < this.config.MIN_PLAYERS) throw new Error("Need at least 2 players");
+        room.startRound();
+        this.broadcastRoom(room);
+      } catch (error) {
+        this.send(current, { type: "error", message: error.message });
+      }
+      return;
+    }
+
     if (parsed.type === "start") {
       try {
         if (room.hostId !== current.id) throw new Error("Only the room host can start");
@@ -743,8 +778,14 @@ export class GameManager {
       if (room.phase === "setup" && timestamp >= room.endAt) room.transitionToSearch();
       if (room.phase === "search") room.checkWinConditions();
       if (room.phase === "results" && timestamp >= room.endAt) {
-        if (room.activePlayers().length >= this.config.MIN_PLAYERS) room.startRound();
-        else room.phase = "lobby";
+        if (room.activePlayers().length < this.config.MIN_PLAYERS) {
+          room.phase = "lobby";
+          room.completed = false;
+          room.winnerRole = null;
+          room.endReason = null;
+        } else {
+          room.endAt = timestamp + CONFIG.RESULTS_MS;
+        }
       }
 
       for (const step of footsteps) {
