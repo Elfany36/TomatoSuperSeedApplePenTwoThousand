@@ -56,6 +56,8 @@ const state = {
   assetKey: "grove",
   assetCache: new Map(),
   mixers: [],
+  mixerCache: new Map(),
+  adjustBrush: false
   hopUntil: 0,
   scanCooldownUntil: 0,
   cameraMode: "third",
@@ -349,11 +351,13 @@ function attachMap(root,key){
   toast(`${MAPS.find(m=>m.id===key)?.label||key} map ready`);
 }
 
-function playGltfAnimations(root, animations){
+function playGltfAnimations(root,animations,key=null){
   if(!animations?.length) return;
+  if(key && state.mixerCache.has(key)) return;
   const mixer=new THREE.AnimationMixer(root);
   for(const clip of animations){try{mixer.clipAction(clip).play();}catch{}}
   state.mixers.push(mixer);
+  if(key) state.mixerCache.set(key,mixer);
 }
 
 function loadMapForRound(round){
@@ -363,11 +367,11 @@ function loadMapForRound(round){
   state.scene.fog.color.set(map.sky);
   $("mapLabel").textContent=map.label;
   const cached=state.assetCache.get(map.id);
-  if(cached){ playGltfAnimations(cached.scene,cached.animations); attachMap(cached.scene,map.id); return; }
+  if(cached){ attachMap(cached.scene,map.id); return; }
   if($("assetBtn"))$("assetBtn").innerHTML='<b>LOADING…</b>';
   new GLTFLoader().load(map.url,g=>{
     state.assetCache.set(map.id,{scene:g.scene,animations:g.animations||[]});
-    playGltfAnimations(g.scene,g.animations||[]);
+    playGltfAnimations(g.scene,g.animations||[],map.id);
     attachMap(g.scene,map.id);
     if($("bootStatus"))$("bootStatus").textContent=map.label+" environment loaded";
   },xhr=>{
@@ -1027,7 +1031,10 @@ function spotAtPointer(event) {
 }
 
 $("scene").addEventListener("pointerdown",event=>{
-  if(event.button===2){state.mouseLook=true;initAudio();return;}
+  if(event.button===2){
+    if(currentSelf()?.role==="hider" && state.room?.phase==="setup"){state.adjustBrush=true;initAudio();return;}
+    state.mouseLook=true;initAudio();return;
+  }
   if(event.button===1 && currentSelf()?.role==="hider" && state.room?.phase==="setup"){state.brushMode="dropper";$("dropperTool")?.classList.add("active");$("brushTool")?.classList.remove("active");sampleAtPointer(event);event.preventDefault();return;}
   if(event.button===0 && currentSelf()?.role==="seeker" && state.room?.phase==="search"){
     try{$("scene").requestPointerLock();}catch{}
@@ -1037,8 +1044,8 @@ $("scene").addEventListener("pointerdown",event=>{
   if (state.room?.phase === "search" && currentSelf()?.role === "seeker") spotAtPointer(event);
 });
 
-window.addEventListener("pointerup", event => {
-  if (event.button === 2) state.mouseLook = false;
+window.addEventListener("pointerup",event=>{
+  if(event.button===2){state.adjustBrush=false;state.mouseLook=false;}
 });
 $("scene").addEventListener("wheel",event=>{
   if(currentSelf()?.role==="hider" && state.room?.phase==="setup"){
@@ -1053,6 +1060,13 @@ window.addEventListener("contextmenu", event => {
 });
 window.addEventListener("pointermove",event=>{
   if(!currentSelf()) return;
+  if(state.adjustBrush && state.room?.phase==="setup"){
+    if(Math.abs(event.movementX)>2){
+      state.brushSize=Math.max(1,Math.min(5,state.brushSize+(event.movementX>0?1:-1)));
+      document.querySelectorAll(".size-btn").forEach(b=>b.classList.toggle("active",Number(b.dataset.size)===state.brushSize));
+    }
+    return;
+  }
   if(state.pointerLocked||state.mouseLook){
     state.input.yaw+=event.movementX*0.0045;
     state.pitch=Math.max(-1.1,Math.min(0.55,state.pitch-event.movementY*0.0032));
