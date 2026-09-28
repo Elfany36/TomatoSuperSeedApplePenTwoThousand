@@ -184,7 +184,14 @@ function handleMessage(message) {
     return;
   }
 
-  if (message.type === "scan_effect") { spawnScanEffect(message.x,message.z); return; }
+  if (message.type === "scan_effect") {
+    spawnScanEffect(message.x,message.z);
+    $("scanFx")?.classList.remove("active");
+    void $("scanFx")?.offsetWidth;
+    $("scanFx")?.classList.add("active");
+    tone(260,0.08,"sine",0.03);
+    return;
+  }
   if (message.type === "taunt_effect") { toast((message.name||"Player")+" used TAUNT.",1600); return; }
   if (message.type === "footstep") {
     state.noiseUntil = performance.now() + 900;
@@ -1139,6 +1146,23 @@ function useAbility() {
 }
 function sendTaunt(){if(currentSelf())send({type:"ability",ability:"taunt"})}
 
+function updateMinimap(room,self){
+  const canvas=$("minimap"); if(!canvas) return;
+  const ctx=canvas.getContext("2d"); if(!ctx) return;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle="#07101a"; ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.strokeStyle="#ffffff20"; ctx.strokeRect(1,1,canvas.width-2,canvas.height-2);
+  const sx=canvas.width/40, sz=canvas.height/30;
+  for(const p of room.players){
+    if(!Number.isFinite(p.x)||!Number.isFinite(p.z)) continue;
+    if(p.id!==self.id && self.role==="seeker" && p.role==="hider" && !p.found) continue;
+    const x=(p.x+20)*sx, y=(p.z+15)*sz;
+    ctx.beginPath(); ctx.arc(x,y,p.id===self.id?4:3,0,Math.PI*2);
+    ctx.fillStyle=p.id===self.id?"#ffffff":p.role==="seeker"?"#ffd166":(p.found?"#ff667d":"#65e6ba");
+    ctx.fill();
+  }
+}
+
 function frame(time) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.05, (time - state.lastFrame) / 1000);
@@ -1156,6 +1180,8 @@ function frame(time) {
     }
 
     updateEffects(time);
+    const self=currentSelf();
+    if(self) updateMinimap(state.room,self);
   }
 
   if (state.renderer && state.scene && state.camera) state.renderer.render(state.scene, state.camera);
