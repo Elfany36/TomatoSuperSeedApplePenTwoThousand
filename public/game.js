@@ -453,7 +453,14 @@ function normalizeMapAsset(root,targetWidth=38,targetDepth=28,targetHeight=10){
   return safeFit;
 }
 function loadMapForRound(round){
-  const map=MAPS[Math.max(0,(round||1)-1)%MAPS.length];
+  const requested = typeof round === "object"
+    ? (round?.mapId ?? round?.map ?? round?.index ?? 1)
+    : round;
+  const numeric = Number(requested);
+  const mapIndex = Number.isFinite(numeric)
+    ? Math.max(0, Math.min(MAPS.length - 1, Math.floor(numeric) - 1))
+    : Math.max(0, MAPS.findIndex(m => m.id === String(requested)));
+  const map=MAPS[mapIndex >= 0 ? mapIndex : 0];
   state.assetKey=map.id;
   state.scene.background.set(map.sky);
   state.scene.fog.color.set(map.sky);
