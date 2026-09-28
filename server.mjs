@@ -337,7 +337,12 @@ export class GameRoom {
     const steps = [];
     const timestamp = now();
     for (const p of this.players.values()) {
-      if (!p.connected && timestamp - p.disconnectedAt >= CONFIG.RECONNECT_MS) continue;
+      if (!p.connected) {
+        p.input = { x: 0, z: 0, sprint: false };
+        p.velocity.x = 0; p.velocity.z = 0;
+        continue;
+      }
+      if (timestamp - p.lastInputAt > 350) p.input = { x: 0, z: 0, sprint: false };
       if (this.phase === "setup" && p.role === "seeker") p.input = { x: 0, z: 0, sprint: false };
       const disabled = p.attached || p.frozenUntil > timestamp;
       if (disabled) p.input = { x: 0, z: 0, sprint: false };
@@ -433,7 +438,9 @@ export class GameRoom {
     if (Number.isFinite(Number(msg.metallic))) p.metallic = clamp(Number(msg.metallic), 0, 1);
     if (Number.isFinite(Number(msg.roughness))) p.roughness = clamp(Number(msg.roughness), 0.05, 1);
     if (["solid","edge","dither","bands"].includes(msg.pattern)) p.pattern = msg.pattern;
-    const isPaintStroke = typeof msg.color === "string" && msg.surfaceId !== "pose" && msg.surfaceId !== "freeze";
+    const surfaceId=String(msg.surfaceId||"");
+    const isPaintStroke = typeof msg.color === "string" &&
+      (surfaceId === "floor" || SURFACES.some(s => s.id === surfaceId) || surfaceId.startsWith("asset:"));
     if (isPaintStroke) {
       const gain = [0, 0.06, 0.10, 0.15, 0.20, 0.26][p.brushSize] || 0.10;
       p.paintCoverage = clamp(p.paintCoverage + gain, 0, 1);
@@ -448,12 +455,19 @@ export class GameRoom {
     if (!p || this.phase !== "setup" || p.role !== "hider") return { ok: false, reason: "not_allowed" };
     p.clones = p.clones || [];
     if (p.clones.length >= MAX_CLONES) return { ok: false, reason: "limit" };
-    const angle = p.yaw + (p.clones.length ? Math.PI / 2 : -Math.PI / 2);
+    const angles = [p.yaw - Math.PI / 2, p.yaw + Math.PI / 2, p.yaw + Math.PI, p.yaw];
+    let spawn = null;
+    for (const angle of angles) {
+      const x = clamp(p.x + Math.sin(angle) * 1.35, WORLD_BOUNDS.minX + 1, WORLD_BOUNDS.maxX - 1);
+      const z = clamp(p.z + Math.cos(angle) * 1.35, WORLD_BOUNDS.minZ + 1, WORLD_BOUNDS.maxZ - 1);
+      if (!collides(x,z)) { spawn={x,z}; break; }
+    }
+    if (!spawn) return { ok: false, reason: "blocked" };
     const clone = {
       id: randomUUID(),
       ownerId: p.id,
-      x: clamp(p.x + Math.sin(angle) * 1.35, WORLD_BOUNDS.minX + 1, WORLD_BOUNDS.maxX - 1),
-      z: clamp(p.z + Math.cos(angle) * 1.35, WORLD_BOUNDS.minZ + 1, WORLD_BOUNDS.maxZ - 1),
+      x: spawn.x,
+      z: spawn.z,
       yaw: p.yaw,
       color: p.color,
       pose: p.pose,
