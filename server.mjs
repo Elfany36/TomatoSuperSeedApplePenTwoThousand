@@ -31,6 +31,12 @@ const SPOT_RANGE = 7.0;
 const SPOT_COOLDOWN_MS = 650;
 const STEP_INTERVAL_MS = 420;
 const MAX_CLONES = 2;
+const TAUNT_COOLDOWN_MS = 1800;
+const STAMINA_MAX = 100;
+const STAMINA_DRAIN_PER_SEC = 30;
+const STAMINA_REGEN_PER_SEC = 22;
+const ACCELERATION = 15;
+const DECELERATION = 22;
 const SPOT_HALF_FOV = 35 * Math.PI / 180;
 const SPOT_MIN_DOT = Math.cos(SPOT_HALF_FOV);
 
@@ -233,6 +239,8 @@ export class GameRoom {
       p.brushSize = 1;
       p.paintCoverage = 0;
       p.input = { x: 0, z: 0, sprint: false };
+      p.velocity = { x: 0, z: 0 };
+      p.stamina = STAMINA_MAX;
       p.lastInputAt = now();
       p.lastSpotAt = 0;
       p.lastAbilityAt = 0;
@@ -326,39 +334,47 @@ export class GameRoom {
 
   update(dt) {
     if (this.phase !== "setup" && this.phase !== "search") return [];
-
     const steps = [];
+    const timestamp = now();
     for (const p of this.players.values()) {
-      if (!p.connected && now() - p.disconnectedAt >= CONFIG.RECONNECT_MS) continue;
+      if (!p.connected && timestamp - p.disconnectedAt >= CONFIG.RECONNECT_MS) continue;
+      if (this.phase === "setup" && p.role === "seeker") p.input = { x: 0, z: 0, sprint: false };
+      const disabled = p.attached || p.frozenUntil > timestamp;
+      if (disabled) p.input = { x: 0, z: 0, sprint: false };
 
-      if (this.phase === "setup" && p.role === "seeker") {
-        p.input = { x: 0, z: 0 };
-        continue;
-      }
-
-      if (p.attached || p.frozenUntil > now()) {
-        p.input = { x: 0, z: 0, sprint: false };
-        continue;
-      }
       const ix = clamp(p.input.x, -1, 1);
       const iz = clamp(p.input.z, -1, 1);
       const len = Math.hypot(ix, iz) || 1;
-      const poseMult = p.pose === "curl" ? 0.48 : p.pose === "crouch" ? 0.62 : p.pose === "freeze" ? 0 : 1;
-      const sprintMult = p.input.sprint && p.pose === "stand" ? 1.38 : 1;
+      const movingInput = !disabled && (Math.abs(ix) + Math.abs(iz) > .01);
+      const requestedSprint = movingInput && p.input.sprint && p.pose === "stand" && p.stamina > 0;
+      if (requestedSprint) p.stamina = Math.max(0, p.stamina - STAMINA_DRAIN_PER_SEC * dt);
+      else p.stamina = Math.min(STAMINA_MAX, p.stamina + STAMINA_REGEN_PER_SEC * dt);
+
+      const poseMult = p.pose === "curl" ? .48 : p.pose === "crouch" ? .62 : p.pose === "freeze" ? 0 : 1;
+      const sprintMult = requestedSprint ? 1.42 : 1;
       const speed = MOVE_SPEED * poseMult * sprintMult;
-      const dx = ix / len * speed * dt;
-      const dz = iz / len * speed * dt;
-      if (Math.abs(dx) + Math.abs(dz) < 0.001) continue;
+      const targetVX = movingInput ? ix / len * speed : 0;
+      const targetVZ = movingInput ? iz / len * speed : 0;
+      const rate = movingInput ? ACCELERATION : DECELERATION;
+      const blend = Math.min(1, rate * dt);
+      p.velocity.x += (targetVX - p.velocity.x) * blend;
+      p.velocity.z += (targetVZ - p.velocity.z) * blend;
 
-      let nx = p.x + dx;
-      let nz = p.z + dz;
-      if (!collides(nx, p.z)) p.x = nx;
-      if (!collides(p.x, nz)) p.z = nz;
+      if (Math.abs(p.velocity.x) + Math.abs(p.velocity.z) > .001) {
+        const nx = p.x + p.velocity.x * dt;
+        const nz = p.z + p.velocity.z * dt;
+        if (!collides(nx, p.z)) p.x = nx; else p.velocity.x = 0;
+        if (!collides(p.x, nz)) p.z = nz; else p.velocity.z = 0;
+        p.blendScore = rgbBlendScore(p.color, p.x, p.z).score;
+      } else {
+        p.velocity.x = 0; p.velocity.z = 0;
+      }
 
-      p.blendScore = rgbBlendScore(p.color, p.x, p.z).score;
-      if (this.phase === "search" && p.role === "hider" && now() - p.lastStepAt >= STEP_INTERVAL_MS) {
-        p.lastStepAt = now();
-        steps.push({ id: p.id, x: p.x, z: p.z, strength: Math.max(0.2, 1 - p.blendScore / 140) });
+      if (this.phase === "search" && p.role === "hider" && timestamp - p.lastStepAt >= STEP_INTERVAL_MS && Math.abs(p.velocity.x) + Math.abs(p.velocity.z) > .2) {
+        p.lastStepAt = timestamp;
+        const sprintNoise = requestedSprint ? 1.35 : 1;
+        const postureNoise = p.pose === "crouch" ? .62 : 1;
+        steps.push({ id: p.id, x: p.x, z: p.z, strength: Math.max(.16, Math.min(1, (1 - p.blendScore / 140) * sprintNoise * postureNoise)) });
       }
     }
     return steps;
@@ -478,7 +494,8 @@ export class GameRoom {
         metallic: p.metallic,
         roughness: p.roughness,
         pattern: p.pattern,
-        paintCoverage: p.paintCoverage
+        paintCoverage: p.paintCoverage,
+        stamina: Math.round(p.stamina)
       };
       const revealAll = this.phase === "results" || this.phase === "lobby";
       const revealSelf = viewerId === p.id;
@@ -578,6 +595,8 @@ export class GameManager {
       joinOrder: 0,
       ws: null,
       input: { x: 0, z: 0, sprint: false },
+      velocity: { x: 0, z: 0 },
+      stamina: STAMINA_MAX,
       lastInputAt: 0,
       lastSpotAt: 0,
       lastAbilityAt: 0,
@@ -854,7 +873,8 @@ export class GameManager {
         }
         this.broadcastRoom(room);
       } else if (ability === "taunt") {
-        if (!current.roomCode) return;
+        if (!current.roomCode || now() - current.lastAbilityAt < TAUNT_COOLDOWN_MS) return;
+        current.lastAbilityAt = now();
         for (const viewer of room.connectedPlayers()) {
           this.send(viewer, { type: "taunt_effect", x: current.x, z: current.z, name: current.name });
         }
