@@ -766,6 +766,15 @@ function updateRoom(room) {
     : "LOBBY";
   $("score").textContent = self.score;
   $("timer").textContent = formatMs(room.leftMs);
+  const coach=room.aiCoach;
+  if(coach){
+    $("aiTitle").textContent=coach.title||"AI DIRECTOR";
+    $("aiHint").textContent=coach.hint||"Adaptive coaching online.";
+    $("aiConfidence").textContent=Math.round((coach.confidence??0)*100)+"%";
+    const icons={hide:"◆",paint:"✦",danger:"!",move:"➜",scan:"◎",hunt:"⌁",clear:"✓",ready:"◆"};
+    $("aiIcon").textContent=icons[coach.mode]||"◆";
+    $("aiPanel").dataset.mode=coach.mode||"ready";
+  }
   $("playerList").innerHTML = room.players.map(player =>
     '<div class="player-row"><div class="meta"><i class="status-dot' + (player.connected ? "" : " off") + '"></i><b>' +
     escapeHtml(player.name) + '</b></div><span class="role-mark">' +
