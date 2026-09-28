@@ -753,11 +753,11 @@ $("leaveBtn").addEventListener("click", () => {
 $("resultClose").addEventListener("click", () => { leaveToLobby(false); });
 $("playAgain")?.addEventListener("click", () => {
   const self=currentSelf();
-  if (self?.id===state.room?.hostId) send({type:"start"});
+  if (self?.id===state.room?.hostId) send({type:"rematch"});
   else toast("Only the host can start the next round.");
 });
 
-$("assetBtn")?.addEventListener("click",()=>{const i=Math.max(0,MAPS.findIndex(m=>m.id===state.assetKey));const next=MAPS[(i+1)%MAPS.length];state.assetKey=next.id;if(state.scene)loadMapForRound(MAP_KEYS_INDEX_FOR(next.id));});
+$("assetBtn")?.addEventListener("click",()=>toast("Map rotation is synchronized to the round."));
 $("name").value = localStorage.getItem(NAME_KEY) || "";
 $("name").addEventListener("input", () => localStorage.setItem(NAME_KEY, $("name").value));
 
