@@ -1,1 +1,105 @@
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Cameleon Hide & Seek</title><link rel="stylesheet" href="/style.css"></head><body><main id="home"><h1>◒ CAMELEON</h1><p>Hide in plain sight.</p><input id="name" placeholder="Your name" maxlength="18"><button onclick="create(0)">PRIVATE ROOM</button><button onclick="create(1)">PUBLIC ROOM</button><div><input id="code" placeholder="ROOM CODE"><button onclick="join()">JOIN</button></div><small>2–10 players · WASD / arrows · sample colors by clicking scenery</small></main><div id="game" hidden><canvas id="c"></canvas><aside><b id="role"></b><strong id="timer"></strong><span>★ <i id="score">0</i></span><p id="hint"></p></aside><div id="room"></div></div><script type="module" src="/game.js"></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Cameleon — Hide in Plain Sight</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main id="lobby" class="screen">
+    <section class="hero">
+      <div class="eyebrow">MECCHA-STYLE CAMOUFLAGE GAME</div>
+      <h1>CAMELEON</h1>
+      <p>Paint your creature. Match the world. Stay hidden before the hunters spot you.</p>
+    </section>
+
+    <section class="panel lobby-panel">
+      <label class="field">
+        <span>Display name</span>
+        <input id="name" maxlength="18" autocomplete="nickname" placeholder="Your name">
+      </label>
+
+      <div class="room-actions">
+        <button id="privateBtn" class="primary">Create private room</button>
+        <button id="publicBtn" class="secondary">Create public room</button>
+      </div>
+
+      <div class="join-row">
+        <input id="code" maxlength="6" placeholder="ROOM CODE" aria-label="Room code">
+        <button id="joinBtn" class="accent">Join</button>
+      </div>
+
+      <div class="divider"><span>PUBLIC ROOMS</span></div>
+      <div id="publicRooms" class="room-list">
+        <div class="muted">Looking for open rooms…</div>
+      </div>
+      <p class="help">2–10 players · WASD / arrows · mouse click · gamepad supported · host starts the round</p>
+      <p id="connection" class="connection">Connecting…</p>
+    </section>
+  </main>
+
+  <main id="game" hidden>
+    <canvas id="scene"></canvas>
+
+    <div class="hud top-hud">
+      <div class="team-card">
+        <span id="rolePill" class="role-pill">HIDER</span>
+        <strong id="phaseLabel">LOBBY</strong>
+        <span id="roundLabel">Round 0</span>
+      </div>
+      <div class="timer-card">
+        <span>TIME</span>
+        <strong id="timer">0:00</strong>
+      </div>
+      <div class="score-card">
+        <span>★ SCORE</span>
+        <strong id="score">0</strong>
+      </div>
+      <button id="leaveBtn" class="ghost">Leave</button>
+    </div>
+
+    <aside class="hud side-hud">
+      <div class="panel room-panel">
+        <div class="panel-title">ROOM <b id="roomCode">------</b></div>
+        <div id="playerList" class="player-list"></div>
+        <button id="startBtn" class="primary full" hidden>Start round</button>
+      </div>
+
+      <div id="camoPanel" class="panel camo-panel" hidden>
+        <div class="panel-title">CAMOUFLAGE</div>
+        <div class="camo-bar"><i id="camoFill"></i></div>
+        <div class="camo-readout"><span id="camoScore">8%</span><span id="camoSurface">White</span></div>
+        <div class="palette" id="palette"></div>
+        <div class="poses">
+          <button data-pose="stand">1 · Stand</button>
+          <button data-pose="crouch">2 · Crouch</button>
+          <button data-pose="curl">3 · Curl</button>
+        </div>
+        <small>Click scenery to sample its color.</small>
+      </div>
+
+      <div id="seekerPanel" class="panel seeker-panel" hidden>
+        <div class="panel-title">SEEKER TOOLS</div>
+        <p id="seekerHint">Click a creature to spot it. Your angle and range matter.</p>
+        <div id="noiseReadout" class="noise-readout">No footsteps</div>
+      </div>
+    </aside>
+
+    <div id="centerPrompt" class="center-prompt"></div>
+    <div id="eventFeed" class="event-feed"></div>
+    <div id="crosshair" class="crosshair" aria-hidden="true">+</div>
+    <div id="results" class="modal" hidden>
+      <div class="panel results-panel">
+        <div class="eyebrow">ROUND COMPLETE</div>
+        <h2 id="resultTitle">HIDERS SURVIVED</h2>
+        <p id="resultReason"></p>
+        <div id="resultRows"></div>
+        <button id="resultClose" class="primary full">Continue</button>
+      </div>
+    </div>
+  </main>
+
+  <script type="module" src="/game.js"></script>
+</body>
+</html>

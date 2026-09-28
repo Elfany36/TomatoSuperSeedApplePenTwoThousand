@@ -1,22 +1,764 @@
-import express from "express";import{createServer}from"http";import{WebSocketServer}from"ws";import crypto from"crypto";
-const app=express();app.use(express.static("public"));app.get("/health",(_,r)=>r.json({ok:true}));const s=createServer(app),w=new WebSocketServer({server:s}),rooms=new Map(),MAX=10,SETUP=25000,ROUND=90000;
-const id=()=>crypto.randomUUID(),code=()=>crypto.randomBytes(3).toString("hex").toUpperCase(),send=(p,m)=>p.ws?.readyState===1&&p.ws.send(JSON.stringify(m)),now=()=>Date.now(),cl=(v,a,b)=>Math.max(a,Math.min(b,v)),safe=n=>String(n||"Player").slice(0,18).replace(/[^\w -]/g,"")||"Player";
-const sp=[[-12,1,10],[-4,1,10],[4,1,10],[12,1,10],[-12,1,-10],[-4,1,-10],[4,1,-10],[12,1,-10],[0,1,12],[0,1,-12]];
-function out(r){return{code:r.code,phase:r.phase,left:Math.max(0,r.end-now()),players:[...r.p.values()].map(x=>({...x,ws:undefined}))}}function emit(r){let m=JSON.stringify({type:"state",room:out(r)});r.p.forEach(x=>x.ws?.readyState===1&&x.ws.send(m))}
-function reset(r,rot=false){let p=[...r.p.values()].filter(x=>x.on);if(rot){let h=p.filter(x=>x.role==="hider").map(x=>x.id);p.forEach((x,i)=>x.role=h.includes(x.id)?"seeker":"hider")}else{p.sort(()=>Math.random()-.5);let n=Math.max(1,Math.floor(p.length/3));p.forEach((x,i)=>x.role=i<n?"seeker":"hider")}p.forEach((x,i)=>Object.assign(x,{x:sp[i][0],y:1,z:sp[i][2],found:false,color:"#fff",pose:"stand"}));r.phase="setup";r.end=now()+SETUP;r.roundEnd=r.end+ROUND;emit(r)}
-function finish(r){let h=[...r.p.values()].filter(x=>x.on&&x.role==="hider"),s=[...r.p.values()].filter(x=>x.on&&x.role==="seeker"),alive=h.filter(x=>!x.found);alive.forEach(x=>x.score+=2);s.forEach(x=>x.score+=h.length-alive.length);r.phase="results";r.end=now()+6500;r.next=r.end;emit(r);setTimeout(()=>rooms.has(r.code)&&reset(r,true),7000)}
-function join(q,r){if(r.p.size>=MAX&&!r.p.has(q.id))return send(q,{type:"error",message:"Room full"});q.room=r.code;q.on=true;r.p.set(q.id,q);send(q,{type:"joined",self:q.id,room:out(r)});emit(r)}
-w.on("connection",ws=>{let q={id:id(),name:"Player",role:"hider",score:0,x:0,y:1,z:0,color:"#fff",pose:"stand",on:true,ws,room:null,input:{x:0,z:0}};
-send(q,{type:"welcome",id:q.id,rooms:[...rooms.values()].filter(r=>r.public).map(r=>({code:r.code,players:r.p.size}))});
-ws.on("message",raw=>{let m;try{m=JSON.parse(raw)}catch{return}
-if(m.type==="hello"){q.name=safe(m.name);if(m.clientId)q.id=m.clientId;let old=[...rooms.values()].find(r=>r.p.get(q.id));if(old){q={...old.p.get(q.id),ws,on:true};old.p.set(q.id,q);return send(q,{type:"joined",self:q.id,room:out(old)})}}
-if(m.type==="create"){let c=code();while(rooms.has(c))c=code();let r={code:c,public:!!m.public,p:new Map(),phase:"lobby",end:0,roundEnd:0};rooms.set(c,r);return join(q,r)}
-if(m.type==="join"){let r=rooms.get(String(m.code||"").toUpperCase());if(!r)return send(q,{type:"error",message:"Room not found"});return join(q,r)}
-if(!q.room)return;let r=rooms.get(q.room);if(!r)return;
-if(m.type==="start"&&r.phase==="lobby"&&r.p.size>=2)return reset(r);
-if(m.type==="input")q.input={x:cl(+m.x||0,-1,1),z:cl(+m.z||0,-1,1)};
-if(m.type==="customize"&&r.phase==="setup"&&q.role==="hider"){if(/^#[0-9a-f]{6}$/i.test(m.color||""))q.color=m.color;if(["stand","crouch","curl"].includes(m.pose))q.pose=m.pose;emit(r)}
-if(m.type==="spot"&&r.phase==="search"&&q.role==="seeker"){let t=r.p.get(m.targetId);if(t&&t.role==="hider"&&!t.found&&Math.hypot(q.x-t.x,q.z-t.z)<3.5){t.found=true;q.score+=3;emit(r);if([...r.p.values()].filter(x=>x.role==="hider").every(x=>x.found))finish(r)}}});
-ws.on("close",()=>{q.on=false;q.drop=now()})});
-setInterval(()=>{for(let r of rooms.values()){let p=[...r.p.values()].filter(x=>x.on);if(r.phase==="lobby"&&p.length>=2&&p.some(x=>x.autostart))reset(r);if(r.phase==="setup"&&now()>=r.end){r.phase="search";r.end=r.roundEnd;emit(r)}if(r.phase==="search"&&now()>=r.end)finish(r);if(r.phase==="setup"||r.phase==="search"){p.forEach(x=>{x.x=cl(x.x+x.input.x*.22,-18,18);x.z=cl(x.z+x.input.z*.22,-14,14)});emit(r)}for(let x of r.p.values())if(!x.on&&now()-x.drop>15000)r.p.delete(x.id)}},50);
-s.listen(process.env.PORT||3000);
+
+import express from "express";
+import { createServer } from "node:http";
+import { randomBytes, randomUUID } from "node:crypto";
+import { WebSocketServer } from "ws";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
+import {
+  WORLD_BOUNDS,
+  SURFACES,
+  PLAYER_SPAWNS,
+  pointAabbDistance,
+  colorSimilarity
+} from "./public/world.js";
+
+export const CONFIG = {
+  PORT: Number(process.env.PORT || 3000),
+  MAX_PLAYERS: 10,
+  MIN_PLAYERS: 2,
+  SETUP_MS: Number(process.env.SETUP_MS || 22000),
+  SEARCH_MS: Number(process.env.SEARCH_MS || 90000),
+  RESULTS_MS: Number(process.env.RESULTS_MS || 7000),
+  RECONNECT_MS: Number(process.env.RECONNECT_MS || 20000),
+  TICK_MS: 50,
+  BROADCAST_MS: 100
+};
+
+const MOVE_SPEED = 4.2;
+const PLAYER_RADIUS = 0.62;
+const SPOT_RANGE = 7.0;
+const SPOT_COOLDOWN_MS = 650;
+const STEP_INTERVAL_MS = 420;
+
+const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+const now = () => Date.now();
+
+export function sanitizeName(value) {
+  const clean = String(value ?? "Player")
+    .replace(/[^\p{L}\p{N}_ -]/gu, "")
+    .trim()
+    .slice(0, 18);
+  return clean || "Player";
+}
+
+export function makeRoomCode(rooms) {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let code = "";
+  do {
+    code = "";
+    for (let i = 0; i < 6; i++) {
+      code += alphabet[randomBytes(1)[0] % alphabet.length];
+    }
+  } while (rooms.has(code));
+  return code;
+}
+
+function rgbBlendScore(color, x, z) {
+  let best = { score: 8, id: null, distance: Infinity };
+  for (const surface of SURFACES) {
+    if (surface.kind === "ground") continue;
+    const d = pointAabbDistance(x, z, surface);
+    const distanceFactor = Math.max(0, 1 - d / 7);
+    const colorFactor = colorSimilarity(color, surface.color);
+    const score = Math.round((colorFactor * 0.78 + distanceFactor * 0.22) * 100);
+    if (score > best.score) {
+      best = { score, id: surface.id, distance: d };
+    }
+  }
+  const floorColor = colorSimilarity(color, "#79C86A");
+  const floorScore = Math.round(floorColor * 88);
+  return floorScore > best.score ? { score: floorScore, id: "floor", distance: 0 } : best;
+}
+
+function aabbContainsSegment(item, ax, az, bx, bz, padding = 0) {
+  const minX = item.x - item.w * 0.5 - padding;
+  const maxX = item.x + item.w * 0.5 + padding;
+  const minZ = item.z - item.d * 0.5 - padding;
+  const maxZ = item.z + item.d * 0.5 + padding;
+  const dx = bx - ax;
+  const dz = bz - az;
+  let t0 = 0;
+  let t1 = 1;
+  const clip = (p, q) => {
+    if (Math.abs(p) < 1e-9) return q >= 0;
+    const r = q / p;
+    if (p < 0) {
+      if (r > t1) return false;
+      if (r > t0) t0 = r;
+    } else {
+      if (r < t0) return false;
+      if (r < t1) t1 = r;
+    }
+    return true;
+  };
+  return (
+    clip(-dx, ax - minX) &&
+    clip(dx, maxX - ax) &&
+    clip(-dz, az - minZ) &&
+    clip(dz, maxZ - az)
+  );
+}
+
+function hasLineOfSight(ax, az, bx, bz) {
+  for (const surface of SURFACES) {
+    if (surface.kind === "ground") continue;
+    if (aabbContainsSegment(surface, ax, az, bx, bz, 0.1)) return false;
+  }
+  return true;
+}
+
+function collides(x, z) {
+  if (x < WORLD_BOUNDS.minX + PLAYER_RADIUS || x > WORLD_BOUNDS.maxX - PLAYER_RADIUS) return true;
+  if (z < WORLD_BOUNDS.minZ + PLAYER_RADIUS || z > WORLD_BOUNDS.maxZ - PLAYER_RADIUS) return true;
+  return SURFACES.some(surface =>
+    surface.kind !== "ground" &&
+    pointAabbDistance(x, z, surface) < PLAYER_RADIUS
+  );
+}
+
+function roundedPlayers(players) {
+  return players.map(p => ({
+    id: p.id,
+    name: p.name,
+    role: p.role,
+    score: p.score,
+    connected: p.connected,
+    found: p.found,
+    pose: p.pose,
+    color: p.color,
+    blendScore: p.blendScore,
+    x: Number(p.x.toFixed(3)),
+    z: Number(p.z.toFixed(3)),
+    yaw: Number(p.yaw.toFixed(3))
+  }));
+}
+
+export class GameRoom {
+  constructor(code, isPublic) {
+    this.code = code;
+    this.public = !!isPublic;
+    this.hostId = null;
+    this.players = new Map();
+    this.phase = "lobby";
+    this.round = 0;
+    this.endAt = 0;
+    this.roundStartedAt = 0;
+    this.roundStats = [];
+    this.lastBroadcast = 0;
+    this.createdAt = now();
+    this.joinCounter = 0;
+    this.roundReason = "";
+  }
+
+  activePlayers() {
+    return [...this.players.values()].filter(p => p.connected || (now() - p.disconnectedAt < CONFIG.RECONNECT_MS));
+  }
+
+  connectedPlayers() {
+    return [...this.players.values()].filter(p => p.connected);
+  }
+
+  addPlayer(player) {
+    if (this.players.size >= CONFIG.MAX_PLAYERS && !this.players.has(player.id)) {
+      throw new Error("Room full");
+    }
+    if (!this.hostId) this.hostId = player.id;
+    player.roomCode = this.code;
+    player.joinOrder = ++this.joinCounter;
+    player.disconnectedAt = 0;
+    player.connected = true;
+    this.players.set(player.id, player);
+  }
+
+  removePlayer(id) {
+    const player = this.players.get(id);
+    if (!player) return false;
+    this.players.delete(id);
+    if (this.hostId === id) {
+      this.hostId = this.connectedPlayers()[0]?.id ?? this.players.keys().next().value ?? null;
+    }
+    if (this.players.size < CONFIG.MIN_PLAYERS && this.phase !== "lobby") {
+      this.finish("hiders", "Round stopped because the room fell below two players.");
+    }
+    return true;
+  }
+
+  startRound() {
+    const players = this.activePlayers();
+    if (players.length < CONFIG.MIN_PLAYERS) throw new Error("Need at least 2 players");
+    this.round += 1;
+    const seekerCount = Math.max(1, Math.floor(players.length / 4));
+    const ordered = players.slice().sort((a, b) => a.joinOrder - b.joinOrder);
+    const offset = (this.round - 1) % ordered.length;
+    const rotated = ordered.slice(offset).concat(ordered.slice(0, offset));
+    const seekers = new Set(rotated.slice(0, seekerCount).map(p => p.id));
+
+    const spawns = PLAYER_SPAWNS.slice();
+    for (let i = spawns.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [spawns[i], spawns[j]] = [spawns[j], spawns[i]];
+    }
+
+    players.forEach((p, index) => {
+      p.role = seekers.has(p.id) ? "seeker" : "hider";
+      p.found = false;
+      p.color = "#FFFFFF";
+      p.pose = "stand";
+      p.input = { x: 0, z: 0 };
+      p.lastInputAt = now();
+      p.lastSpotAt = 0;
+      p.lastStepAt = 0;
+      p.yaw = p.role === "seeker" ? Math.PI : 0;
+      const spawn = spawns[index % spawns.length];
+      p.x = p.role === "seeker" ? spawn[0] * 0.55 : spawn[0] * 0.88;
+      p.z = p.role === "seeker" ? 13.2 : spawn[1] * 0.72;
+      p.blendScore = rgbBlendScore(p.color, p.x, p.z).score;
+    });
+
+    this.phase = "setup";
+    this.roundStartedAt = now();
+    this.endAt = this.roundStartedAt + CONFIG.SETUP_MS;
+    this.roundStats = [];
+    this.roundReason = "";
+  }
+
+  transitionToSearch() {
+    this.phase = "search";
+    this.endAt = now() + CONFIG.SEARCH_MS;
+    for (const p of this.players.values()) {
+      if (p.role === "seeker") {
+        const lane = [...this.players.values()].filter(x => x.role === "seeker").indexOf(p);
+        p.x = lane === 0 ? -3.5 : 3.5;
+        p.z = 13.0;
+        p.input = { x: 0, z: 0 };
+        p.yaw = -Math.PI;
+      }
+    }
+  }
+
+  finish(winnerRole, reason) {
+    if (this.phase === "results") return;
+    const hiders = [...this.players.values()].filter(p => p.role === "hider");
+    const seekers = [...this.players.values()].filter(p => p.role === "seeker");
+    const roundStats = [];
+
+    for (const p of hiders) {
+      const survived = !p.found;
+      const camouflageBonus = survived ? Math.floor(p.blendScore / 34) : 0;
+      const delta = survived ? 5 + camouflageBonus : 0;
+      p.score += delta;
+      roundStats.push({
+        id: p.id,
+        name: p.name,
+        role: p.role,
+        delta,
+        detail: survived ? "Survived" : "Spotted"
+      });
+    }
+    for (const p of seekers) {
+      const foundCount = hiders.filter(h => h.found).length;
+      const delta = foundCount === hiders.length ? Math.max(0, foundCount * 3) : foundCount * 3;
+      p.score += delta;
+      roundStats.push({
+        id: p.id,
+        name: p.name,
+        role: p.role,
+        delta,
+        detail: foundCount + " hider" + (foundCount === 1 ? "" : "s") + " found"
+      });
+    }
+
+    this.roundStats = roundStats;
+    this.phase = "results";
+    this.endAt = now() + CONFIG.RESULTS_MS;
+    this.roundReason = reason;
+  }
+
+  checkWinConditions() {
+    const hiders = [...this.players.values()].filter(p => p.role === "hider");
+    if (hiders.length && hiders.every(p => p.found)) {
+      this.finish("seekers", "Every hider was spotted.");
+    } else if (this.phase === "search" && now() >= this.endAt) {
+      this.finish("hiders", "The search timer expired.");
+    }
+  }
+
+  update(dt) {
+    if (this.phase !== "setup" && this.phase !== "search") return [];
+
+    const steps = [];
+    for (const p of this.players.values()) {
+      if (!p.connected && now() - p.disconnectedAt >= CONFIG.RECONNECT_MS) continue;
+
+      if (this.phase === "setup" && p.role === "seeker") {
+        p.input = { x: 0, z: 0 };
+        continue;
+      }
+
+      const ix = clamp(p.input.x, -1, 1);
+      const iz = clamp(p.input.z, -1, 1);
+      const len = Math.hypot(ix, iz) || 1;
+      const dx = ix / len * MOVE_SPEED * dt;
+      const dz = iz / len * MOVE_SPEED * dt;
+      if (Math.abs(dx) + Math.abs(dz) < 0.001) continue;
+
+      let nx = p.x + dx;
+      let nz = p.z + dz;
+      if (!collides(nx, p.z)) p.x = nx;
+      if (!collides(p.x, nz)) p.z = nz;
+
+      p.blendScore = rgbBlendScore(p.color, p.x, p.z).score;
+      if (this.phase === "search" && p.role === "hider" && now() - p.lastStepAt >= STEP_INTERVAL_MS) {
+        p.lastStepAt = now();
+        steps.push({ id: p.id, x: p.x, z: p.z, strength: Math.max(0.2, 1 - p.blendScore / 140) });
+      }
+    }
+    return steps;
+  }
+
+  spot(seekerId, targetId) {
+    const seeker = this.players.get(seekerId);
+    const target = this.players.get(targetId);
+    if (!seeker || !target) return { ok: false, reason: "missing" };
+    if (this.phase !== "search" || seeker.role !== "seeker") return { ok: false, reason: "phase" };
+    if (target.role !== "hider" || target.found) return { ok: false, reason: "target" };
+    if (now() - seeker.lastSpotAt < SPOT_COOLDOWN_MS) return { ok: false, reason: "cooldown" };
+    seeker.lastSpotAt = now();
+
+    const dx = target.x - seeker.x;
+    const dz = target.z - seeker.z;
+    const distance = Math.hypot(dx, dz);
+    if (distance > SPOT_RANGE || !hasLineOfSight(seeker.x, seeker.z, target.x, target.z)) {
+      return { ok: false, reason: "out_of_range", x: target.x, z: target.z };
+    }
+
+    const forwardX = Math.sin(seeker.yaw);
+    const forwardZ = Math.cos(seeker.yaw);
+    const dot = (dx * forwardX + dz * forwardZ) / (distance || 1);
+    if (dot < -0.15) return { ok: false, reason: "wrong_direction", x: target.x, z: target.z };
+
+    target.found = true;
+    seeker.score += 3;
+    this.checkWinConditions();
+    return { ok: true, x: target.x, z: target.z, targetId: target.id };
+  }
+
+  customize(playerId, msg) {
+    const p = this.players.get(playerId);
+    if (!p || this.phase !== "setup" || p.role !== "hider") return { ok: false, reason: "not_allowed" };
+    if (typeof msg.color === "string" && /^#[0-9a-f]{6}$/i.test(msg.color)) p.color = msg.color.toUpperCase();
+    if (["stand", "crouch", "curl"].includes(msg.pose)) p.pose = msg.pose;
+    p.blendScore = rgbBlendScore(p.color, p.x, p.z).score;
+    const sample = SURFACES.find(s => s.id === msg.surfaceId);
+    return { ok: true, color: p.color, pose: p.pose, surface: sample?.name ?? "Painted" };
+  }
+
+  stateFor(viewerId) {
+    const viewer = this.players.get(viewerId);
+    const players = [...this.players.values()].map(p => {
+      const base = {
+        id: p.id,
+        name: p.name,
+        role: p.role,
+        score: p.score,
+        connected: p.connected,
+        found: p.found,
+        pose: p.pose,
+        color: p.color,
+        blendScore: p.blendScore
+      };
+      const revealAll = this.phase === "results" || this.phase === "lobby";
+      const revealSelf = viewerId === p.id;
+      const revealTeam = viewer && viewer.role === p.role;
+      const revealSearchTarget = this.phase === "search";
+      if (revealAll || revealSelf || revealTeam || revealSearchTarget) {
+        return { ...base, x: p.x, z: p.z, yaw: p.yaw };
+      }
+      return { ...base, x: null, z: null, yaw: 0 };
+    });
+
+    return {
+      code: this.code,
+      public: this.public,
+      hostId: this.hostId,
+      phase: this.phase,
+      round: this.round,
+      leftMs: Math.max(0, this.endAt - now()),
+      players,
+      roundStats: this.roundStats,
+      winnerRole: this.phase === "results"
+        ? ([...this.roundStats].some(s => s.role === "hider" && s.delta > 0) ? "hiders" : "seekers")
+        : null,
+      reason: this.roundReason
+    };
+  }
+}
+
+export class GameManager {
+  constructor(options = {}) {
+    this.config = { ...CONFIG, ...options };
+    this.rooms = new Map();
+    this.connections = new Map();
+  }
+
+  makePlayer(id, name) {
+    return {
+      id,
+      name: sanitizeName(name),
+      roomCode: null,
+      role: "hider",
+      score: 0,
+      x: 0,
+      z: 12,
+      yaw: 0,
+      color: "#FFFFFF",
+      pose: "stand",
+      blendScore: 8,
+      found: false,
+      connected: false,
+      disconnectedAt: 0,
+      joinOrder: 0,
+      ws: null,
+      input: { x: 0, z: 0 },
+      lastInputAt: 0,
+      lastSpotAt: 0,
+      lastStepAt: 0
+    };
+  }
+
+  findPlayer(id) {
+    for (const room of this.rooms.values()) {
+      const player = room.players.get(id);
+      if (player) return player;
+    }
+    return null;
+  }
+
+  createRoom(name, isPublic, existingId = null) {
+    const player = existingId ? this.findPlayer(existingId) : null;
+    if (existingId && !player) throw new Error("Player not found");
+    const id = existingId || randomUUID();
+    const p = player || this.makePlayer(id, name);
+    const room = new GameRoom(makeRoomCode(this.rooms), isPublic);
+    room.addPlayer(p);
+    this.rooms.set(room.code, room);
+    return { room, player: p };
+  }
+
+  joinRoom(code, name, clientId) {
+    const room = this.rooms.get(String(code || "").toUpperCase());
+    if (!room) throw new Error("Room not found");
+    const existing = room.players.get(clientId);
+    if (existing) {
+      existing.name = sanitizeName(name || existing.name);
+      existing.connected = true;
+      existing.disconnectedAt = 0;
+      return { room, player: existing, reconnected: true };
+    }
+    if (room.players.size >= this.config.MAX_PLAYERS) throw new Error("Room full");
+    if (room.phase !== "lobby") throw new Error("Round already in progress");
+    const player = this.makePlayer(clientId, name);
+    room.addPlayer(player);
+    return { room, player, reconnected: false };
+  }
+
+  attach(player, ws) {
+    if (player.ws && player.ws !== ws) {
+      try { player.ws.close(4001, "Reconnected"); } catch {}
+    }
+    player.ws = ws;
+    player.connected = true;
+    player.disconnectedAt = 0;
+    this.connections.set(ws, player);
+  }
+
+  detach(ws) {
+    const player = this.connections.get(ws);
+    if (!player) return;
+    this.connections.delete(ws);
+    if (player.ws === ws) player.ws = null;
+    player.connected = false;
+    player.disconnectedAt = now();
+    player.input = { x: 0, z: 0 };
+  }
+
+  send(player, message) {
+    if (player?.ws?.readyState === 1) {
+      try { player.ws.send(JSON.stringify(message)); } catch {}
+    }
+  }
+
+  broadcastRoom(room, type = "state") {
+    for (const player of room.connectedPlayers()) {
+      this.send(player, { type, room: room.stateFor(player.id) });
+    }
+  }
+
+  directory() {
+    return [...this.rooms.values()]
+      .filter(room => room.public && room.phase === "lobby")
+      .map(room => ({
+        code: room.code,
+        players: room.players.size,
+        maxPlayers: this.config.MAX_PLAYERS
+      }));
+  }
+
+  broadcastDirectory() {
+    const rooms = this.directory();
+    for (const [ws, player] of this.connections) {
+      if (!player.roomCode) this.send(player, { type: "rooms", rooms });
+    }
+  }
+
+  handleMessage(ws, message) {
+    const parsed = typeof message === "string" ? JSON.parse(message) : message;
+    const current = this.connections.get(ws);
+
+    if (parsed.type === "hello") {
+      const clientId = String(parsed.clientId || randomUUID());
+      let player = this.findPlayer(clientId);
+      let room = player ? this.rooms.get(player.roomCode) : null;
+
+      if (!player) {
+        player = this.makePlayer(clientId, parsed.name);
+      } else {
+        player.name = sanitizeName(parsed.name || player.name);
+      }
+
+      this.attach(player, ws);
+      if (room) {
+        player.connected = true;
+        this.send(player, { type: "reconnected", self: player.id, room: room.stateFor(player.id) });
+        this.broadcastRoom(room);
+      } else {
+        this.send(player, { type: "welcome", self: player.id, rooms: this.directory() });
+      }
+      return;
+    }
+
+    if (!current) {
+      this.send({ ws }, { type: "error", message: "Send hello first" });
+      return;
+    }
+
+    if (parsed.type === "create") {
+      try {
+        if (current.roomCode) throw new Error("Already in a room");
+        const result = this.createRoom(parsed.name || current.name, !!parsed.public, current.id);
+        this.attach(result.player, ws);
+        this.send(result.player, { type: "joined", self: result.player.id, room: result.room.stateFor(result.player.id) });
+        this.broadcastRoom(result.room);
+        this.broadcastDirectory();
+      } catch (error) {
+        this.send(current, { type: "error", message: error.message });
+      }
+      return;
+    }
+
+    if (parsed.type === "join") {
+      try {
+        if (current.roomCode) throw new Error("Already in a room");
+        const result = this.joinRoom(parsed.code, parsed.name || current.name, current.id);
+        this.attach(result.player, ws);
+        this.send(result.player, {
+          type: result.reconnected ? "reconnected" : "joined",
+          self: result.player.id,
+          room: result.room.stateFor(result.player.id)
+        });
+        this.broadcastRoom(result.room);
+        this.broadcastDirectory();
+      } catch (error) {
+        this.send(current, { type: "error", message: error.message });
+      }
+      return;
+    }
+
+    if (parsed.type === "rooms") {
+      this.send(current, { type: "rooms", rooms: this.directory() });
+      return;
+    }
+
+    if (!current.roomCode) {
+      this.send(current, { type: "error", message: "Join a room first" });
+      return;
+    }
+
+    const room = this.rooms.get(current.roomCode);
+    if (!room) {
+      current.roomCode = null;
+      this.send(current, { type: "error", message: "Room expired" });
+      return;
+    }
+
+    if (parsed.type === "start") {
+      try {
+        if (room.hostId !== current.id) throw new Error("Only the room host can start");
+        if (room.phase !== "lobby") throw new Error("Round already running");
+        room.startRound();
+        this.broadcastRoom(room);
+      } catch (error) {
+        this.send(current, { type: "error", message: error.message });
+      }
+      return;
+    }
+
+    if (parsed.type === "leave") {
+      const code = room.code;
+      room.removePlayer(current.id);
+      current.roomCode = null;
+      current.connected = true;
+      current.role = "hider";
+      current.score = 0;
+      this.send(current, { type: "left", code });
+      this.broadcastRoom(room);
+      this.broadcastDirectory();
+      if (room.players.size === 0) this.rooms.delete(room.code);
+      return;
+    }
+
+    if (parsed.type === "input") {
+      current.input = {
+        x: clamp(Number(parsed.x) || 0, -1, 1),
+        z: clamp(Number(parsed.z) || 0, -1, 1)
+      };
+      if (Number.isFinite(Number(parsed.yaw))) current.yaw = Number(parsed.yaw);
+      current.lastInputAt = now();
+      return;
+    }
+
+    if (parsed.type === "customize") {
+      const result = room.customize(current.id, parsed);
+      if (!result.ok) {
+        this.send(current, { type: "error", message: "Camouflage can only be changed by hiders during setup." });
+      } else {
+        this.send(current, { type: "customized", ...result });
+        this.broadcastRoom(room);
+      }
+      return;
+    }
+
+    if (parsed.type === "spot") {
+      const result = room.spot(current.id, String(parsed.targetId || ""));
+      if (result.ok) {
+        for (const player of room.connectedPlayers()) {
+          this.send(player, {
+            type: "spot_effect",
+            success: true,
+            targetId: result.targetId,
+            x: result.x,
+            z: result.z
+          });
+        }
+        this.broadcastRoom(room);
+      } else if (["out_of_range", "wrong_direction"].includes(result.reason)) {
+        this.send(current, {
+          type: "spot_miss",
+          reason: result.reason,
+          x: result.x,
+          z: result.z
+        });
+      }
+      return;
+    }
+  }
+
+  tick() {
+    const timestamp = now();
+    for (const room of [...this.rooms.values()]) {
+      if (room.phase === "lobby" && room.connectedPlayers().length >= 2 && room.autoStartAt && timestamp >= room.autoStartAt) {
+        room.startRound();
+      }
+      const footsteps = room.update(this.config.TICK_MS / 1000);
+
+      if (room.phase === "setup" && timestamp >= room.endAt) room.transitionToSearch();
+      if (room.phase === "search") room.checkWinConditions();
+      if (room.phase === "results" && timestamp >= room.endAt) {
+        if (room.activePlayers().length >= this.config.MIN_PLAYERS) room.startRound();
+        else room.phase = "lobby";
+      }
+
+      for (const step of footsteps) {
+        for (const player of room.connectedPlayers()) {
+          if (player.role === "seeker") {
+            const dx = step.x - player.x;
+            const dz = step.z - player.z;
+            const distance = Math.hypot(dx, dz);
+            if (distance < 16) {
+              this.send(player, {
+                type: "footstep",
+                x: step.x,
+                z: step.z,
+                strength: step.strength * Math.max(0, 1 - distance / 16)
+              });
+            }
+          }
+        }
+      }
+
+      if (timestamp - room.lastBroadcast >= this.config.BROADCAST_MS) {
+        room.lastBroadcast = timestamp;
+        this.broadcastRoom(room);
+      }
+
+      for (const player of [...room.players.values()]) {
+        if (!player.connected && timestamp - player.disconnectedAt >= this.config.RECONNECT_MS) {
+          room.removePlayer(player.id);
+        }
+      }
+      if (room.players.size === 0) this.rooms.delete(room.code);
+    }
+    this.broadcastDirectory();
+  }
+}
+
+export function createServer() {
+  const manager = new GameManager();
+  const app = express();
+  app.use(express.static(path.join(path.dirname(fileURLToPath(import.meta.url)), "public")));
+  app.get("/health", (_req, res) => res.json({
+    ok: true,
+    rooms: manager.rooms.size,
+    maxPlayers: manager.config.MAX_PLAYERS
+  }));
+  app.get("/api/rooms", (_req, res) => res.json({ rooms: manager.directory() }));
+
+  const server = createServer(app);
+  const wss = new WebSocketServer({ server, path: "/ws" });
+
+  wss.on("connection", ws => {
+    ws.on("message", raw => {
+      try {
+        manager.handleMessage(ws, JSON.parse(String(raw)));
+      } catch (error) {
+        manager.send(manager.connections.get(ws), {
+          type: "error",
+          message: "Invalid message"
+        });
+      }
+    });
+    ws.on("close", () => manager.detach(ws));
+  });
+
+  const ticker = setInterval(() => manager.tick(), manager.config.TICK_MS);
+  const close = () => new Promise(resolve => {
+    clearInterval(ticker);
+    for (const ws of wss.clients) {
+      try { ws.close(); } catch {}
+    }
+    server.close(resolve);
+  });
+
+  return { app, server, manager, wss, close };
+}
+
+const isMain = process.argv[1] === fileURLToPath(import.meta.url);
+if (isMain) {
+  const { server, manager } = createServer();
+  server.listen(CONFIG.PORT, () => {
+    console.log("[CAMELEON] Listening on http://localhost:" + CONFIG.PORT);
+    console.log("[CAMELEON] WebSocket path: /ws");
+    console.log("[CAMELEON] Supports 2-" + CONFIG.MAX_PLAYERS + " players.");
+  });
+}
