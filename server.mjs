@@ -764,6 +764,11 @@ export class GameManager {
       return;
     }
 
+    if (parsed.type === "ping") {
+      this.send(current, { type: "pong", t: Number(parsed.t) || 0 });
+      return;
+    }
+
     if (!current.roomCode) {
       this.send(current, { type: "error", message: "Join a room first" });
       return;
