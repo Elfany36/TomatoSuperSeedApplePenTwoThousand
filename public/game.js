@@ -262,7 +262,6 @@ function ensureScene() {
 
   buildWorld();
   window.addEventListener("resize", resize);
-  bindSceneInput();
   requestAnimationFrame(frame);
 }
 
