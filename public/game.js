@@ -160,6 +160,8 @@ function handleMessage(message) {
     return;
   }
 
+  if (message.type === "clone_created") { toast("Decoy clone deployed.", 1400); playPoseSound(); return; }
+
   if (message.type === "customized") {
     state.selectedColor = message.color || state.selectedColor;
     state.brushSize = message.brushSize || state.brushSize;
@@ -642,7 +644,9 @@ function updateRoom(room) {
   $("startBtn").hidden = !(room.phase === "lobby" && host);
   $("startBtn").disabled = room.players.filter(p => p.connected).length < 2;
 
-  $("camoPanel").hidden = !(room.phase === "setup" && self.role === "hider");
+  if (room.phase === "setup" && self.role === "hider" && previousPhase !== "setup") state.paintModeOpen = true;
+  if (room.phase !== "setup") state.paintModeOpen = false;
+  $("camoPanel").hidden = !(room.phase === "setup" && self.role === "hider" && state.paintModeOpen);
   $("seekerPanel").hidden = !(room.phase === "search" && self.role === "seeker");
   $("crosshair").hidden = !(room.phase === "search" && self.role === "seeker");
   if($("cloneCreate")) $("cloneCreate").disabled=!(room.phase==="setup"&&self.role==="hider");
