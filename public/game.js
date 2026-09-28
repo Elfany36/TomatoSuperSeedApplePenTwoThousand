@@ -523,8 +523,10 @@ function makePlayerMesh(player) {
   const band=new THREE.Mesh(new THREE.TorusGeometry(.92,.028,7,32),new THREE.MeshBasicMaterial({color:player.role==="seeker"?"#FFD166":"#65E6BA"}));
   band.rotation.x=Math.PI/2; band.position.y=.18; group.add(band);
 
+  const legs = group.children.filter(o => o.geometry?.type === "CylinderGeometry");
   state.playerGroup.add(group);
-  return {group,mats:[bodyMat,head.material,tail.material],accent,band,target:new THREE.Vector3(player.x||0,0,player.z||0)};
+  return {group,mats:[bodyMat,head.material,tail.material],accent,band,target:new THREE.Vector3(player.x||0,0,player.z||0),
+    lastX:player.x||0,lastZ:player.z||0,body,head,tail,legs};
 }
 
 function setPlayerStyle(entry, player) {
@@ -534,6 +536,21 @@ function setPlayerStyle(entry, player) {
   entry.band.material.color.set(player.found ? "#FF667D" : player.role==="seeker" ? "#FFD166" : "#65E6BA");
   entry.group.scale.y=player.pose==="crouch"?.72:player.pose==="curl"?.56:player.pose==="freeze"?.48:1;
   entry.group.rotation.z=player.pose==="curl"?.16:0;
+}
+
+function animatePlayer(entry, player, time){
+  const dx=(player.x??entry.lastX)-entry.lastX;
+  const dz=(player.z??entry.lastZ)-entry.lastZ;
+  const moving=Math.hypot(dx,dz)>0.003 && !player.found;
+  entry.lastX=player.x??entry.lastX;
+  entry.lastZ=player.z??entry.lastZ;
+  const rate=moving?(player.role==='seeker' ? 8 : 7):2.5;
+  const wave=Math.sin(time*0.001*rate);
+  const bob=moving?Math.abs(wave)*0.045:Math.sin(time*0.001*2.5)*0.012;
+  entry.body.position.y=0.82+bob;
+  entry.head.position.y=1.74+bob*0.65;
+  entry.tail.rotation.y=(moving?wave*0.18:wave*0.03);
+  entry.legs.forEach((leg,i)=>{if(i<4) leg.rotation.x=moving?((i%2?-1:1)*wave*0.32):0;});
 }
 
 function updatePlayers(room) {
@@ -550,14 +567,17 @@ function updatePlayers(room) {
     const hasPosition = Number.isFinite(player.x) && Number.isFinite(player.z);
     entry.group.visible = hasPosition && (room.phase !== "lobby");
     if (hasPosition) {
-      entry.group.position.set(player.x, 0, player.z);
+      entry.target.set(player.x,0,player.z);
+      entry.group.position.lerp(entry.target,0.42);
       entry.group.rotation.y = player.yaw || 0;
     }
     setPlayerStyle(entry, player);
+    animatePlayer(entry,player,performance.now());
 
     const isSelf = player.id === state.selfId;
     const isHiderInSetup = room.phase === "setup" && player.role === "hider";
     entry.group.renderOrder = isSelf ? 3 : isHiderInSetup ? 2 : 1;
+    entry.group.visible = entry.group.visible && !(isSelf && player.role === "seeker" && state.cameraMode === "first");
     entry.group.traverse(obj => {
       if (obj.material) obj.material.depthWrite = true;
     });
