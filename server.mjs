@@ -477,6 +477,30 @@ export class GameRoom {
     return [...this.players.values()].flatMap(p => (p.clones || []).map(clone => ({ ...clone, role: "hider", found: false })));
   }
 
+  aiCoach(viewerId) {
+    const p=this.players.get(viewerId);
+    if(!p) return {mode:"observer",title:"AI DIRECTOR",hint:"Join the round to receive adaptive coaching.",confidence:1};
+    if(this.phase==="setup" && p.role==="hider"){
+      if(p.blendScore<45) return {mode:"hide",title:"CAMOUFLAGE COACH",hint:"Blend is strong. Reduce movement and choose a matching surface.",confidence:.92};
+      const nearby=SURFACES.filter(s=>s.kind!=="ground").map(s=>({s,d:pointAabbDistance(p.x,p.z,s)})).sort((a,b)=>a.d-b.d)[0];
+      if(nearby && nearby.d<8) return {mode:"paint",title:"CAMOUFLAGE COACH",hint:"Paint toward the nearby "+nearby.s.id.replace(/[-_]/g," ")+" palette, then try a low-profile pose.",confidence:.86};
+      return {mode:"paint",title:"CAMOUFLAGE COACH",hint:"Find cover, sample its color, then increase paint coverage.",confidence:.8};
+    }
+    if(this.phase==="search" && p.role==="hider"){
+      if(p.found) return {mode:"danger",title:"AI DIRECTOR",hint:"You have been revealed. Break line of sight and relocate.",confidence:.98};
+      if(p.blendScore>=70) return {mode:"hide",title:"AI DIRECTOR",hint:"Camouflage is currently favorable. Freeze when a seeker approaches.",confidence:.9};
+      return {mode:"move",title:"AI DIRECTOR",hint:"Your contrast is high. Repaint or relocate before moving.",confidence:.82};
+    }
+    if(this.phase==="search" && p.role==="seeker"){
+      const found=[...this.players.values()].filter(h=>h.role==="hider"&&h.found).length;
+      const total=[...this.players.values()].filter(h=>h.role==="hider").length;
+      if(found===0) return {mode:"scan",title:"AI HUNT COACH",hint:"Use Scan Pulse, then follow confirmed line-of-sight targets.",confidence:.88};
+      if(found<total) return {mode:"hunt",title:"AI HUNT COACH",hint:"Sweep intersections and listen for footsteps; do not tag through cover.",confidence:.84};
+      return {mode:"clear",title:"AI HUNT COACH",hint:"All hiders are revealed. Confirm the remaining targets.",confidence:.96};
+    }
+    return {mode:"ready",title:"AI DIRECTOR",hint:"Prepare for the next phase.",confidence:.7};
+  }
+
   stateFor(viewerId) {
     const viewer = this.players.get(viewerId);
     const players = [...this.players.values()].map(p => {
@@ -560,7 +584,8 @@ export class GameRoom {
       winnerRole: this.phase === "results"
         ? ([...this.roundStats].some(s => s.role === "hider" && s.delta > 0) ? "hiders" : "seekers")
         : null,
-      reason: this.roundReason
+      reason: this.roundReason,
+      aiCoach: this.aiCoach(viewerId)
     };
   }
 }
