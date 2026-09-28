@@ -1,0 +1,26 @@
+{
+  "project": "Meccha Chameleon Web",
+  "authorization": "user-supplied direct-reuse directive",
+  "map_assets": [
+    {"id":"grove","name":"Sunlit Grove","url":"https://cdn.3dassets.dev/assets/38765/v1/model.glb","license":"CC0-1.0"},
+    {"id":"backrooms","name":"Backrooms and Liminal Spaces","url":"https://cdn.3dassets.dev/assets/25333/v1/model.glb","license":"CC0-1.0"},
+    {"id":"gallery","name":"Art Gallery and Exhibition Rooms","url":"https://cdn.3dassets.dev/assets/35871/v1/model.glb","license":"CC0-1.0"},
+    {"id":"restaurant","name":"Restaurant Kitchen and Dining Room","url":"https://cdn.3dassets.dev/assets/16541/v1/model.glb","license":"CC0-1.0"},
+    {"id":"supermarket","name":"Supermarket Operations","url":"https://cdn.3dassets.dev/assets/26952/v1/model.glb","license":"CC0-1.0"},
+    {"id":"hotel","name":"Hotel and Resort Operations","url":"https://cdn.3dassets.dev/assets/25950/v1/model.glb","license":"CC0-1.0"},
+    {"id":"sewer","name":"Undercity Sewers and Thieves Den","url":"https://cdn.3dassets.dev/assets/27259/v1/model.glb","license":"CC0-1.0"},
+    {"id":"city","name":"Pixel Modern City Street","url":"https://cdn.3dassets.dev/assets/29075/v1/model.glb","license":"CC0-1.0"},
+    {"id":"farm","name":"Arable Fields and Farm Machinery","url":"https://cdn.3dassets.dev/assets/16895/v1/model.glb","license":"CC0-1.0"}
+  ],
+  "code_sources": [
+    {"repository":"twalkerallenii-spec/hide-and-seek-arena","license":"MIT"},
+    {"repository":"chengai77/paint-and-seek","license":"MIT"},
+    {"repository":"zeddic/hide-and-seek","license":"MIT"},
+    {"repository":"JPBotelho/Camouflage-Shader","license":"MIT"},
+    {"repository":"maccam912/mega-chamomile","authorization":"direct reuse authorized by supplied directive"},
+    {"repository":"FugitiveTheGame/Fugitive","authorization":"direct reuse authorized by supplied directive"},
+    {"repository":"nicholas-maltbie/PropHunt","authorization":"direct reuse authorized by supplied directive"},
+    {"repository":"probablyspoonie/Prop-Hunt","authorization":"direct reuse authorized by supplied directive"},
+    {"repository":"inuskeph/mygame","authorization":"direct reuse authorized by supplied directive"}
+  ]
+}
