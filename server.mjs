@@ -998,7 +998,7 @@ export class GameManager {
           room.winnerRole = null;
           room.endReason = null;
         } else {
-          room.endAt = timestamp + CONFIG.RESULTS_MS;
+          room.endAt = timestamp + room.config.RESULTS_MS;
         }
       }
 
