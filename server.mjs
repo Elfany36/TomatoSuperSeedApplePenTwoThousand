@@ -467,7 +467,9 @@ export class GameManager {
   }
 
   createRoom(name, isPublic, existingId = null) {
-    const player = existingId ? this.findPlayer(existingId) : null;
+    const player = existingId
+      ? (this.findPlayer(existingId) || [...this.connections.values()].find(p => p.id === existingId))
+      : null;
     if (existingId && !player) throw new Error("Player not found");
     const id = existingId || randomUUID();
     const p = player || this.makePlayer(id, name);
