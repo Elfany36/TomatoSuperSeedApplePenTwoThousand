@@ -184,7 +184,18 @@ export class GameRoom {
       this.hostId = this.connectedPlayers()[0]?.id ?? this.players.keys().next().value ?? null;
     }
     if (this.players.size < CONFIG.MIN_PLAYERS && this.phase !== "lobby") {
-      this.finish("hiders", "Round stopped because the room fell below two players.");
+      if (this.phase === "search") {
+        this.finish("hiders", "Round stopped because the room fell below two players.");
+      } else {
+        this.phase = "lobby";
+        this.roundId = null;
+        this.completed = false;
+        this.winnerRole = null;
+        this.endReason = null;
+        this.roundStats = [];
+        this.roundReason = "";
+        this.endAt = 0;
+      }
     }
     return true;
   }
