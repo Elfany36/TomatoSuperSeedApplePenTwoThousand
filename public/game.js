@@ -297,11 +297,11 @@ function ensureScene() {
     antialias: Math.min(devicePixelRatio, 1.5) < 1.3,
     powerPreference: "high-performance"
   });
-  state.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+  state.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
   state.renderer.setSize(innerWidth, innerHeight);
   state.renderer.outputColorSpace = THREE.SRGBColorSpace;
   state.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  state.renderer.toneMappingExposure = 1.12;
+  state.renderer.toneMappingExposure = 1.22;
   state.renderer.shadowMap.enabled = true;
   state.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   state.renderer.shadowMap.autoUpdate = true;
@@ -312,13 +312,19 @@ function ensureScene() {
   const sun = new THREE.DirectionalLight("#FFF0CF", 3.4);
   sun.position.set(-14, 26, 12);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.mapSize.set(3072, 3072);
   sun.shadow.camera.left = -30; sun.shadow.camera.right = 30;
   sun.shadow.camera.top = 28; sun.shadow.camera.bottom = -28;
   state.scene.add(sun);
   const fill = new THREE.DirectionalLight("#9CC6FF", .9);
   fill.position.set(18, 12, -10);
   state.scene.add(fill);
+  const rim = new THREE.DirectionalLight("#D7B6FF", 1.15);
+  rim.position.set(-20, 10, -22);
+  state.scene.add(rim);
+  const front = new THREE.PointLight("#FFF3D2", .8, 34, 2);
+  front.position.set(0, 5.5, 2);
+  state.scene.add(front);
 
   state.worldGroup = new THREE.Group();
   state.assetGroup = new THREE.Group();
@@ -415,6 +421,11 @@ function addDressingCylinder(parent,x,y,z,r,h,color,sides=8){
 function addGlowOrb(parent,x,y,z,color,scale=.12){
   const mesh=new THREE.Mesh(new THREE.SphereGeometry(scale,10,8),new THREE.MeshBasicMaterial({color,transparent:true,opacity:.9}));mesh.position.set(x,y,z);parent.add(mesh);return mesh;
 }
+function addMapLight(parent,x,y,z,color){
+  const bulb=new THREE.Mesh(new THREE.SphereGeometry(.11,10,8),new THREE.MeshBasicMaterial({color}));
+  bulb.position.set(x,y,z); parent.add(bulb);
+  const glow=new THREE.PointLight(color,.65,6,2); glow.position.set(x,y,z); parent.add(glow);
+}
 function buildMapDressing(key){
   const g=state.mapDressGroup;
   const themes={grove:["#8CF29A","#F7D774"],backrooms:["#FFE38A","#D7C7A2"],gallery:["#B7D7FF","#FFFFFF"],restaurant:["#FF8A6B","#FFD166"],supermarket:["#7DE5FF","#FF78B8"],hotel:["#D6B7FF","#8ED8FF"],sewer:["#55E0B3","#6A8BFF"],city:["#7CD7FF","#FF7BC8"],farm:["#B9F27C","#FFD166"]};
@@ -426,6 +437,9 @@ function buildMapDressing(key){
   if(key==="gallery")for(let i=0;i<5;i++){const x=-12+i*6;addDressingBox(g,x,2.15,-14.18,2.2,3.4,.12,"#F1F4F7");addDressingBox(g,x,2.25,-14.25,1.7,2.4,.06,accent);}
   if(key==="restaurant")for(const x of[-12,-6,6,12]){addDressingBox(g,x,1.7,-14,.9,3.4,.9,"#6A4A35");addDressingBox(g,x,3.45,-14,1.3,.08,1.3,accent,accent);}
   if(key==="supermarket"||key==="city")for(let i=0;i<5;i++){const x=-12+i*6;addDressingBox(g,x,1,-14,.18,2,.18,"#343B47");addDressingBox(g,x,1.95,-14,1.8,.7,.08,accent,accent);}
+  // Soft colored practical lights reinforce the playful toy-diorama look.
+  const practical=themes[key]||themes.grove;
+  for(const x of[-15,-5,5,15]) addMapLight(g,x,3.8,key==="sewer"?-12.8:-13.9,practical[1]);
 }
 function buildAtmosphere(key){
   if(state.ambientPoints)state.effectGroup.remove(state.ambientPoints);
@@ -652,12 +666,13 @@ function addGroundDetails() {
 
 function makePlayerMesh(player) {
   const group=new THREE.Group();group.userData.playerId=player.id;
-  const skin=material(player.role==="seeker"?"#7566D8":(player.color||"#FFFFFF"),.62),skinDark=material("#26353C",.48),shell=material(player.role==="seeker"?"#BEB5FF":"#DCE9E4",.58),shellDark=material("#879B92",.7);
+  const skin=material(player.role==="seeker"?"#7566D8":(player.color||"#FFFFFF"),.5),skinDark=material("#26353C",.42),shell=material(player.role==="seeker"?"#BEB5FF":"#DCE9E4",.5),shellDark=material("#879B92",.62);
+  [skin,shell,skinDark,shellDark].forEach(m=>{m.metalness=.04;m.flatShading=true;});
   const eye=new THREE.MeshStandardMaterial({color:"#F7FFFF",roughness:.2,metalness:.05,emissive:"#8DEBFF",emissiveIntensity:.35}),pupil=material("#10151D",.2);
-  const body=new THREE.Mesh(new THREE.SphereGeometry(.76,24,16),skin);body.scale.set(1.2,.88,1.38);body.position.y=.88;body.castShadow=true;group.add(body);
+  const body=new THREE.Mesh(new THREE.SphereGeometry(.76,28,20),skin);body.scale.set(1.2,.88,1.38);body.position.y=.88;body.castShadow=true;group.add(body);
   const belly=new THREE.Mesh(new THREE.SphereGeometry(.62,20,14),shell);belly.scale.set(1.02,.48,1.05);belly.position.set(0,.72,-.48);belly.castShadow=true;group.add(belly);
   const shellTop=new THREE.Mesh(new THREE.SphereGeometry(.5,20,12),shell.clone());shellTop.scale.set(1.55,.52,1.72);shellTop.position.set(0,1.18,.16);shellTop.castShadow=true;group.add(shellTop);
-  const head=new THREE.Mesh(new THREE.SphereGeometry(.5,22,14),skin.clone());head.scale.set(1.02,.95,1.08);head.position.set(0,1.83,-.17);head.castShadow=true;group.add(head);
+  const head=new THREE.Mesh(new THREE.SphereGeometry(.5,26,18),skin.clone());head.scale.set(1.02,.95,1.08);head.position.set(0,1.83,-.17);head.castShadow=true;group.add(head);
   const snout=new THREE.Mesh(new THREE.CapsuleGeometry(.22,.38,6,14),shell.clone());snout.rotation.x=Math.PI/2;snout.scale.set(1,.62,1);snout.position.set(0,1.72,-.6);snout.castShadow=true;group.add(snout);
   const jaw=new THREE.Mesh(new THREE.CapsuleGeometry(.12,.28,5,10),skinDark);jaw.rotation.x=Math.PI/2;jaw.scale.set(1.15,.42,1);jaw.position.set(0,1.57,-.59);group.add(jaw);
   const crest=[];for(let i=0;i<5;i++){const fin=new THREE.Mesh(new THREE.ConeGeometry(.11,.34-i*.025,5),shellDark.clone());fin.rotation.x=Math.PI;fin.position.set((i-2)*.16,2.24,-.02+Math.abs(i-2)*.035);fin.castShadow=true;group.add(fin);crest.push(fin);}
@@ -668,10 +683,14 @@ function makePlayerMesh(player) {
   const curve=new THREE.CatmullRomCurve3([new THREE.Vector3(0,.72,.75),new THREE.Vector3(.22,.58,1.18),new THREE.Vector3(.48,.46,1.52),new THREE.Vector3(.22,.34,1.82),new THREE.Vector3(-.3,.29,1.7),new THREE.Vector3(-.52,.34,1.48)]);
   const tail=new THREE.Mesh(new THREE.TubeGeometry(curve,28,.105,9,false),skin.clone());tail.castShadow=true;group.add(tail);
   const tailTip=new THREE.Mesh(new THREE.SphereGeometry(.14,12,8),skinDark.clone());tailTip.position.set(-.52,.34,1.48);tailTip.castShadow=true;group.add(tailTip);
+  const nameCanvas=document.createElement("canvas");nameCanvas.width=256;nameCanvas.height=48;
+  const nctx=nameCanvas.getContext("2d");nctx.fillStyle="#071018cc";nctx.roundRect(4,4,248,40,12);nctx.fill();nctx.fillStyle="#ffffff";nctx.font="900 20px system-ui";nctx.textAlign="center";nctx.fillText(String(player.name||"Player").slice(0,16),128,31);
+  const nameSprite=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(nameCanvas),transparent:true,depthWrite:false}));
+  nameSprite.scale.set(1.7,.32,1);nameSprite.position.set(0,2.7,0);group.add(nameSprite);
   const band=new THREE.Mesh(new THREE.TorusGeometry(.98,.035,8,40),new THREE.MeshBasicMaterial({color:player.role==="seeker"?"#FFD166":"#65E6BA",transparent:true,opacity:.9}));band.rotation.x=Math.PI/2;band.position.y=.16;group.add(band);
   const aura=new THREE.Mesh(new THREE.SphereGeometry(1.12,16,12),new THREE.MeshBasicMaterial({color:"#65E6BA",transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending}));aura.position.y=.9;group.add(aura);
   state.playerGroup.add(group);
-  const entry={group,mats:[skin,head.material,tail.material,tailTip.material,body.material],accent:shell,shell,shellDark,band,aura,target:new THREE.Vector3(player.x||0,0,player.z||0),lastX:player.x||0,lastZ:player.z||0,body,head,tail,legs,arms,feet,eyes,pupils,crest};
+  const entry={group,mats:[skin,head.material,tail.material,tailTip.material,body.material],accent:shell,shell,shellDark,band,aura,nameSprite,target:new THREE.Vector3(player.x||0,0,player.z||0),lastX:player.x||0,lastZ:player.z||0,body,head,tail,legs,arms,feet,eyes,pupils,crest};
   state.players.set(player.id,entry);return entry;
 }
 function paintTexture(color,pattern){
@@ -712,6 +731,7 @@ function setPlayerStyle(entry, player) {
   entry.band.material.color.set(player.found?"#FF667D":player.role==="seeker"?"#FFD166":"#65E6BA");
   entry.aura.material.color.set(player.found?"#FF667D":player.role==="seeker"?"#FFD166":"#65E6BA");
   entry.aura.material.opacity=player.found?.14:(player.role==="seeker"?.035:.018);
+  if(entry.nameSprite) entry.nameSprite.visible = player.id===state.selfId || state.room?.phase==="lobby" || state.room?.phase==="results" || player.role==="seeker";
   const pose=player.pose||"stand";
   const ground=["starfish","lieflat","ball"].includes(pose);
   entry.group.scale.set(1,ground?.82:(pose==="crouch"?.72:pose==="curl"?.56:pose==="freeze"?.48:1),ground?1.1:(pose==="prone"?1.15:1));
@@ -1019,6 +1039,18 @@ document.querySelectorAll(".size-btn").forEach(button=>button.addEventListener("
   toast("Brush size "+state.brushSize);
 }));
 document.querySelectorAll(".poses button").forEach(button=>button.addEventListener("click",()=>choosePose(button.dataset.pose)));
+$("colorWheel")?.addEventListener("pointerdown",e=>{
+  const wheel=$("colorWheel"), r=wheel.getBoundingClientRect();
+  const cx=r.left+r.width/2, cy=r.top+r.height/2;
+  const angle=Math.atan2(e.clientY-cy,e.clientX-cx);
+  const hue=(angle*180/Math.PI+90+360)%360;
+  const color=new THREE.Color().setHSL(hue/360,.82,.58);
+  const hex="#"+color.getHexString().toUpperCase();
+  state.selectedColor=hex; if($("customColor"))$("customColor").value=hex;
+  buildPalette(hex);
+  const self=currentSelf();
+  if(self&&state.room?.phase==="setup")send({type:"customize",color:hex,pose:self.pose,brushSize:state.brushSize,metallic:self.metallic??.03,roughness:self.roughness??.86,pattern:self.pattern||"solid",surfaceId:"hue-wheel"});
+});
 $("customColor")?.addEventListener("input",e=>{
   state.selectedColor=e.target.value.toUpperCase();
   buildPalette(state.selectedColor);
