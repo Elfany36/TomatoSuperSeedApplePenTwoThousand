@@ -30,6 +30,7 @@ const PLAYER_RADIUS = 0.62;
 const SPOT_RANGE = 7.0;
 const SPOT_COOLDOWN_MS = 650;
 const STEP_INTERVAL_MS = 420;
+const MAX_CLONES = 2;
 const SPOT_HALF_FOV = 35 * Math.PI / 180;
 const SPOT_MIN_DOT = Math.cos(SPOT_HALF_FOV);
 
@@ -238,6 +239,11 @@ export class GameRoom {
       p.lastStepAt = 0;
       p.revealedUntil = 0;
       p.frozenUntil = 0;
+      p.attached = false;
+      p.clones = [];
+      p.metallic = 0.03;
+      p.roughness = 0.86;
+      p.pattern = "solid";
       p.yaw = p.role === "seeker" ? Math.PI : 0;
       const spawn = spawns[index % spawns.length];
       p.x = p.role === "seeker" ? spawn[0] * 0.55 : spawn[0] * 0.88;
@@ -330,7 +336,7 @@ export class GameRoom {
         continue;
       }
 
-      if (p.frozenUntil > now()) {
+      if (p.attached || p.frozenUntil > now()) {
         p.input = { x: 0, z: 0, sprint: false };
         continue;
       }
@@ -389,19 +395,57 @@ export class GameRoom {
     const p = this.players.get(playerId);
     if (!p || this.phase !== "setup" || p.role !== "hider") return { ok: false, reason: "not_allowed" };
     if (typeof msg.color === "string" && /^#[0-9a-f]{6}$/i.test(msg.color)) p.color = msg.color.toUpperCase();
-    if (["stand", "crouch", "curl", "freeze"].includes(msg.pose)) {
+    if (["stand", "crouch", "curl", "freeze", "prone", "wallflat", "lean", "backbend", "slant"].includes(msg.pose)) {
       p.pose = msg.pose;
       p.frozenUntil = msg.pose === "freeze" ? now() + 2200 : 0;
+      p.attached = msg.pose === "wallflat";
     }
-    if (Number.isFinite(Number(msg.brushSize))) p.brushSize = clamp(Math.round(Number(msg.brushSize)), 1, 3);
+    if (Number.isFinite(Number(msg.brushSize))) p.brushSize = clamp(Math.round(Number(msg.brushSize)), 1, 5);
+    if (Number.isFinite(Number(msg.metallic))) p.metallic = clamp(Number(msg.metallic), 0, 1);
+    if (Number.isFinite(Number(msg.roughness))) p.roughness = clamp(Number(msg.roughness), 0.05, 1);
+    if (["solid","edge","dither","bands"].includes(msg.pattern)) p.pattern = msg.pattern;
     const isPaintStroke = typeof msg.color === "string" && msg.surfaceId !== "pose" && msg.surfaceId !== "freeze";
     if (isPaintStroke) {
-      const gain = [0, 0.10, 0.16, 0.22][p.brushSize] || 0.10;
+      const gain = [0, 0.06, 0.10, 0.15, 0.20, 0.26][p.brushSize] || 0.10;
       p.paintCoverage = clamp(p.paintCoverage + gain, 0, 1);
     }
     p.blendScore = rgbBlendScore(p.color, p.x, p.z).score;
     const sample = SURFACES.find(s => s.id === msg.surfaceId);
     return { ok: true, color: p.color, pose: p.pose, brushSize: p.brushSize, paintCoverage: p.paintCoverage, surface: sample?.name ?? "Painted" };
+  }
+
+  createClone(playerId) {
+    const p = this.players.get(playerId);
+    if (!p || this.phase !== "setup" || p.role !== "hider") return { ok: false, reason: "not_allowed" };
+    p.clones = p.clones || [];
+    if (p.clones.length >= MAX_CLONES) return { ok: false, reason: "limit" };
+    const angle = p.yaw + (p.clones.length ? Math.PI / 2 : -Math.PI / 2);
+    const clone = {
+      id: randomUUID(),
+      ownerId: p.id,
+      x: clamp(p.x + Math.sin(angle) * 1.35, WORLD_BOUNDS.minX + 1, WORLD_BOUNDS.maxX - 1),
+      z: clamp(p.z + Math.cos(angle) * 1.35, WORLD_BOUNDS.minZ + 1, WORLD_BOUNDS.maxZ - 1),
+      yaw: p.yaw,
+      color: p.color,
+      pose: p.pose,
+      brushSize: p.brushSize,
+      metallic: p.metallic,
+      roughness: p.roughness,
+      pattern: p.pattern
+    };
+    p.clones.push(clone);
+    return { ok: true, clone };
+  }
+
+  deleteClones(playerId) {
+    const p = this.players.get(playerId);
+    if (!p || p.role !== "hider") return { ok: false, reason: "not_allowed" };
+    p.clones = [];
+    return { ok: true };
+  }
+
+  allClones() {
+    return [...this.players.values()].flatMap(p => (p.clones || []).map(clone => ({ ...clone, role: "hider", found: false })));
   }
 
   stateFor(viewerId) {
@@ -418,6 +462,9 @@ export class GameRoom {
         color: p.color,
         blendScore: p.blendScore,
         brushSize: p.brushSize,
+        metallic: p.metallic,
+        roughness: p.roughness,
+        pattern: p.pattern,
         paintCoverage: p.paintCoverage
       };
       const revealAll = this.phase === "results" || this.phase === "lobby";
@@ -441,6 +488,29 @@ export class GameRoom {
       return { ...base, x: null, z: null, yaw: 0 };
     });
 
+    const clones = this.allClones().map(clone => {
+      const owner = this.players.get(clone.ownerId);
+      const revealSelf = viewerId === clone.ownerId;
+      const revealAll = this.phase === "results" || this.phase === "lobby";
+      const revealSearch = this.phase === "search" && viewer?.role === "seeker" &&
+        owner && hasLineOfSight(viewer.x, viewer.z, clone.x, clone.z) &&
+        Math.hypot(viewer.x - clone.x, viewer.z - clone.z) <= 10;
+      return {
+        id: "clone:" + clone.id,
+        ownerId: clone.ownerId,
+        role: "hider",
+        color: clone.color,
+        pose: clone.pose,
+        brushSize: clone.brushSize,
+        metallic: clone.metallic,
+        roughness: clone.roughness,
+        pattern: clone.pattern,
+        x: revealSelf || revealAll || revealSearch ? clone.x : null,
+        z: revealSelf || revealAll || revealSearch ? clone.z : null,
+        yaw: clone.yaw
+      };
+    });
+
     return {
       code: this.code,
       public: this.public,
@@ -455,6 +525,7 @@ export class GameRoom {
       endedAt: this.endedAt,
       leftMs: Math.max(0, this.endAt - now()),
       players,
+      clones,
       roundStats: this.roundStats,
       winnerRole: this.phase === "results"
         ? ([...this.roundStats].some(s => s.role === "hider" && s.delta > 0) ? "hiders" : "seekers")
@@ -497,7 +568,12 @@ export class GameManager {
       lastInputAt: 0,
       lastSpotAt: 0,
       lastAbilityAt: 0,
-      lastStepAt: 0
+      lastStepAt: 0,
+      metallic: 0.03,
+      roughness: 0.86,
+      pattern: "solid",
+      attached: false,
+      clones: []
     };
   }
 
@@ -665,6 +741,24 @@ export class GameManager {
     if (!room) {
       current.roomCode = null;
       this.send(current, { type: "error", message: "Room expired" });
+      return;
+    }
+
+    if (parsed.type === "clone_create") {
+      try {
+        const result = room.createClone(current.id);
+        if (!result.ok) throw new Error(result.reason === "limit" ? "Clone limit reached." : "Clones can only be created by hiders during setup.");
+        this.broadcastRoom(room);
+        this.send(current, { type: "clone_created", clone: result.clone });
+      } catch (error) {
+        this.send(current, { type: "error", message: error.message });
+      }
+      return;
+    }
+
+    if (parsed.type === "clone_delete") {
+      const result = room.deleteClones(current.id);
+      if (result.ok) this.broadcastRoom(room);
       return;
     }
 
