@@ -301,6 +301,10 @@ export class GameRoom {
         continue;
       }
 
+      if (p.frozenUntil > now()) {
+        p.input = { x: 0, z: 0, sprint: false };
+        continue;
+      }
       const ix = clamp(p.input.x, -1, 1);
       const iz = clamp(p.input.z, -1, 1);
       const len = Math.hypot(ix, iz) || 1;
@@ -356,7 +360,7 @@ export class GameRoom {
     const p = this.players.get(playerId);
     if (!p || this.phase !== "setup" || p.role !== "hider") return { ok: false, reason: "not_allowed" };
     if (typeof msg.color === "string" && /^#[0-9a-f]{6}$/i.test(msg.color)) p.color = msg.color.toUpperCase();
-    if (["stand", "crouch", "curl"].includes(msg.pose)) p.pose = msg.pose;
+    if (["stand", "crouch", "curl", "freeze"].includes(msg.pose)) p.pose = msg.pose;
     p.blendScore = rgbBlendScore(p.color, p.x, p.z).score;
     if (Number.isFinite(Number(msg.brushSize))) p.brushSize = clamp(Math.round(Number(msg.brushSize)), 1, 3);
     if (Number.isFinite(Number(msg.paintCoverage))) p.paintCoverage = clamp(Number(msg.paintCoverage), 0, 1);
