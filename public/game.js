@@ -77,7 +77,8 @@ const state = {
   pingTimer: null,
   painting: false,
   lastPaintAt: 0,
-  assetLoadToken: 0
+  assetLoadToken: 0,
+  pendingAction: null
 };
 
 function apiSocketUrl() {
@@ -132,6 +133,13 @@ function connect() {
       clientId,
       name: localStorage.getItem(NAME_KEY) || $("name").value || "Player"
     });
+    if (state.pendingAction) {
+      const action = state.pendingAction;
+      state.pendingAction = null;
+      setTimeout(() => {
+        if (state.socket?.readyState === WebSocket.OPEN) action();
+      }, 0);
+    }
   });
 
   ws.addEventListener("message", event => {
@@ -312,11 +320,6 @@ function ensureScene() {
   fill.position.set(18, 12, -10);
   state.scene.add(fill);
 
-  // Always preload the default environment as soon as the renderer exists.
-  // This makes the game visually useful before a round starts and removes
-  // the need to manually choose/upload a map for normal play.
-  loadMapForRound({ mapId: state.assetKey || "grove" });
-
   state.worldGroup = new THREE.Group();
   state.assetGroup = new THREE.Group();
   state.playerGroup = new THREE.Group();
@@ -326,6 +329,9 @@ function ensureScene() {
 
   buildWorld();
   buildAtmosphere("lobby");
+  // Preload the default environment after the scene groups exist so the
+  // automatic map path is safe even before a player joins a room.
+  loadMapForRound({ mapId: state.assetKey || "grove" });
   window.addEventListener("resize", resize);
   requestAnimationFrame(frame);
 }
@@ -494,7 +500,8 @@ function loadMapForRound(round){
 }
 
 function loadLocalMap(file){
-  if(!file||!state.scene) return;
+  if(!file) return;
+  ensureScene();
   const reader=new FileReader();
   reader.onload=()=>{
     const buffer=reader.result;
@@ -980,16 +987,21 @@ window.addEventListener("keydown", event => {
 window.addEventListener("keyup", event => { keys[event.code] = false; });
 
 // Give clear feedback instead of making disconnected buttons appear dead.
-function guardConnection() {
-  if (state.socket?.readyState === WebSocket.OPEN) return true;
+function guardConnection(action) {
+  if (state.socket?.readyState === WebSocket.OPEN) {
+    action();
+    return true;
+  }
+  state.pendingAction = action;
   toast("Connecting to game server…", 1800);
+  ensureScene();
   ensureScene();
 connect();
   return false;
 }
-$("privateBtn").addEventListener("click", () => { if (guardConnection()) createRoom(false); });
-$("publicBtn").addEventListener("click", () => { if (guardConnection()) createRoom(true); });
-$("joinBtn").addEventListener("click", () => { if (guardConnection()) joinRoom(); });
+$("privateBtn").addEventListener("click", () => guardConnection(() => createRoom(false)));
+$("publicBtn").addEventListener("click", () => guardConnection(() => createRoom(true)));
+$("joinBtn").addEventListener("click", () => guardConnection(joinRoom));
 $("code").addEventListener("keydown", event => {
   if (event.key === "Enter") joinRoom();
 });
