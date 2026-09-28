@@ -3,44 +3,34 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <title>Cameleon — Hide in Plain Sight</title>
+  <title>CAMELEON — Meccha Chameleon Web</title>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
   <main id="lobby" class="screen">
     <section class="hero">
-      <div class="eyebrow">MECCHA-STYLE CAMOUFLAGE GAME</div>
+      <div class="eyebrow">MECCHA CHAMELEON WEB</div>
       <h1>CAMELEON</h1>
-      <p>Paint your creature. Match the world. Stay hidden before the hunters spot you.</p>
+      <p>Paint, blend, freeze, and hide. Seekers must actually see you before they can tag you.</p>
     </section>
-
     <section class="panel lobby-panel">
-      <label class="field">
-        <span>Display name</span>
-        <input id="name" maxlength="18" autocomplete="nickname" placeholder="Your name">
-      </label>
-
+      <label class="field"><span>Display name</span><input id="name" maxlength="18" autocomplete="nickname" placeholder="Your name"></label>
       <div class="room-actions">
-        <button id="privateBtn" class="primary">Create private room</button>
-        <button id="publicBtn" class="secondary">Create public room</button>
+        <button id="privateBtn" class="primary">Create Private Room</button>
+        <button id="publicBtn" class="secondary">Create Public Room</button>
       </div>
-
-      <div class="join-row">
-        <input id="code" maxlength="6" placeholder="ROOM CODE" aria-label="Room code">
-        <button id="joinBtn" class="accent">Join</button>
-      </div>
-
+      <div class="join-row"><input id="code" maxlength="6" placeholder="ROOM CODE" aria-label="Room code"><button id="joinBtn" class="accent">Join</button></div>
       <div class="divider"><span>PUBLIC ROOMS</span></div>
-      <div id="publicRooms" class="room-list">
-        <div class="muted">Looking for open rooms…</div>
-      </div>
-      <p class="help">2–10 players · WASD / arrows · mouse click · gamepad supported · host starts the round</p>
+      <div id="publicRooms" class="room-list"><div class="muted">Looking for open rooms…</div></div>
+      <p class="help">2–10 players · server-authoritative rooms · real WebSocket sync · WASD/arrows · mouse look · gamepad · paint + eyedropper.</p>
       <p id="connection" class="connection">Connecting…</p>
     </section>
   </main>
 
   <main id="game" hidden>
     <canvas id="scene"></canvas>
+    <div class="vignette"></div>
+    <div id="scanFx" class="scan-fx"></div>
 
     <div class="hud top-hud">
       <div class="team-card">
@@ -48,58 +38,85 @@
         <strong id="phaseLabel">LOBBY</strong>
         <span id="roundLabel">Round 0</span>
       </div>
-      <div class="timer-card">
-        <span>TIME</span>
-        <strong id="timer">0:00</strong>
-      </div>
-      <div class="score-card">
-        <span>★ SCORE</span>
-        <strong id="score">0</strong>
-      </div>
+      <div class="timer-card"><span>TIME</span><strong id="timer">0:00</strong></div>
+      <div class="score-card"><span>★ SCORE</span><strong id="score">0</strong></div>
+      <div class="map-card"><span>MAP</span><strong id="mapLabel">—</strong></div>
       <button id="leaveBtn" class="ghost">Leave</button>
     </div>
 
     <aside class="hud side-hud">
       <div class="panel room-panel">
-        <div class="panel-title">ROOM <b id="roomCode">------</b></div>
+        <div class="panel-title"><span>ROOM</span><b id="roomCode">------</b></div>
         <div id="playerList" class="player-list"></div>
-        <button id="startBtn" class="primary full" hidden>Start round</button>
+        <button id="startBtn" class="primary full" hidden>Start Round</button>
       </div>
 
       <div id="camoPanel" class="panel camo-panel" hidden>
-        <div class="panel-title">CAMOUFLAGE</div>
+        <div class="panel-title"><span>CAMOUFLAGE WORKBENCH</span><span id="brushModeLabel">BRUSH</span></div>
         <div class="camo-bar"><i id="camoFill"></i></div>
-        <div class="camo-readout"><span id="camoScore">8%</span><span id="camoSurface">White</span></div>
-        <div class="palette" id="palette"></div>
+        <div class="camo-readout"><span>BLEND <b id="camoScore">0%</b></span><span id="camoSurface">Ground</span></div>
+        <div id="palette" class="palette"></div>
+        <div class="tool-row">
+          <button id="brushTool" class="tool active">🖌 Brush</button>
+          <button id="dropperTool" class="tool">💧 Eye Drop</button>
+        </div>
+        <div class="size-row">
+          <button class="size-btn active" data-size="1">S · 1</button>
+          <button class="size-btn" data-size="2">M · 2</button>
+          <button class="size-btn" data-size="3">L · 3</button>
+        </div>
+        <div class="meter-row"><span>PAINT POWER</span><b id="paintCoverageValue">0%</b></div>
+        <div class="ink-bar"><i id="inkFill" style="width:100%"></i></div>
         <div class="poses">
           <button data-pose="stand">1 · Stand</button>
           <button data-pose="crouch">2 · Crouch</button>
           <button data-pose="curl">3 · Curl</button>
+          <button data-pose="freeze">4 · Freeze</button>
         </div>
-        <small>Click scenery to sample its color.</small>
+        <small>Click the scenery while in Brush mode to paint toward the selected color. Eye Drop copies the color under your cursor.</small>
       </div>
 
       <div id="seekerPanel" class="panel seeker-panel" hidden>
-        <div class="panel-title">SEEKER TOOLS</div>
-        <p id="seekerHint">Click a creature to spot it. Your angle and range matter.</p>
+        <div class="panel-title"><span>SEEKER TOOLS</span><span id="scanReadout">READY</span></div>
+        <p>Click a hider only when you have a valid target. Server-side range, FOV and line-of-sight checks decide the tag.</p>
+        <div class="ability-row">
+          <button id="scanBtn" class="ability"><strong>SCAN PULSE</strong><span>E · reveals nearby hiders</span></button>
+          <button id="tauntBtn" class="ability"><strong>TAUNT</strong><span>Q · broadcast a taunt</span></button>
+        </div>
         <div id="noiseReadout" class="noise-readout">No footsteps</div>
       </div>
     </aside>
 
+    <div class="hud bottom-left"><div class="panel control-panel">
+      <div class="panel-title">CONTROLS</div>
+      <div class="control-grid">
+        <div><b>WASD</b> Move</div><div><b>SHIFT</b> Sprint</div><div><b>SPACE</b> Jump</div><div><b>CTRL</b> Crouch</div>
+        <div><b>1–4</b> Poses</div><div><b>E</b> Ability</div><div><b>Q</b> Taunt</div><div><b>V</b> Camera</div>
+        <div><b>R</b> Recenter</div><div><b>LMB</b> Brush/Spot</div>
+      </div>
+    </div></div>
+
+    <div class="hud bottom-right"><div class="panel mini-panel">
+      <div class="panel-title">TACTICAL</div>
+      <canvas id="minimap" width="180" height="132"></canvas>
+      <div class="meter-row"><span>STAMINA</span><b id="staminaValue">100%</b></div>
+      <div class="stamina-bar"><i id="staminaFill" style="width:100%"></i></div>
+    </div></div>
+
     <div id="centerPrompt" class="center-prompt"></div>
     <div id="eventFeed" class="event-feed"></div>
-    <div id="crosshair" class="crosshair" aria-hidden="true">+</div>
+    <div id="crosshair" class="crosshair" hidden>+</div>
+
     <div id="results" class="modal" hidden>
       <div class="panel results-panel">
         <div class="eyebrow">ROUND COMPLETE</div>
-        <h2 id="resultTitle">HIDERS SURVIVED</h2>
+        <h2 id="resultTitle">ROUND COMPLETE</h2>
         <p id="resultReason"></p>
         <div id="resultRows"></div>
         <button id="resultClose" class="primary full">Continue</button>
       </div>
     </div>
   </main>
-
   <script type="module" src="/game.js"></script>
 </body>
 </html>
