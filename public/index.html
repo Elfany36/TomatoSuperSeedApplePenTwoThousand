@@ -28,6 +28,10 @@
         <button id="publicBtn" class="secondary">Create Public Room</button>
       </div>
       <div class="join-row"><input id="code" maxlength="6" placeholder="ROOM CODE" aria-label="Room code"><button id="joinBtn" class="accent">Join</button></div>
+      <div class="local-map-box">
+        <label>LOCAL MAP / GLB / GLTF<input id="localMap" type="file" accept=".glb,.gltf,model/gltf-binary,model/gltf+json"></label>
+        <span>Load a local environment for private testing; animations in the GLTF will play automatically.</span>
+      </div>
       <div class="divider"><span>PUBLIC ROOMS</span></div>
       <div id="publicRooms" class="room-list"><div class="muted">Looking for open rooms…</div></div>
       <p class="help">2–10 players · server-authoritative rooms · real WebSocket sync · WASD/arrows · mouse look · gamepad · paint + eyedropper.</p>
