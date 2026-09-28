@@ -116,25 +116,25 @@ function runChecks(){
 
   const has=id=>!!d.getElementById(id);
   [
-    ["Display name",()=>has("displayName")],
-    ["Private room button",()=>has("createPrivateBtn")],
-    ["Public room button",()=>has("createPublicBtn")],
-    ["Room code input",()=>has("roomCode")],
+    ["Display name",()=>has("name")],
+    ["Private room button",()=>has("privateBtn")],
+    ["Public room button",()=>has("publicBtn")],
+    ["Room code input",()=>has("code")],
     ["Public room list",()=>has("publicRooms")],
-    ["Connection status",()=>has("connectionStatus")]
+    ["Connection status",()=>has("connection")]
   ].forEach(x=>test(x[0],x[1],lobby));
 
   [
-    ["Room panel",()=>has("roomPanel")],
+    ["Room panel",()=>has("roomCode")],
     ["Player list",()=>has("playerList")],
     ["Start button",()=>has("startBtn")],
-    ["Hider paint panel",()=>has("paintPanel")],
+    ["Hider paint panel",()=>has("camoPanel")],
     ["Seeker panel",()=>has("seekerPanel")],
-    ["Brush size controls",()=>has("brushSize")],
+    ["Brush size controls",()=>d.querySelectorAll(".size-btn").length>=5],
     ["Custom color",()=>has("customColor")],
-    ["Pose controls",()=>d.querySelectorAll(".pose-btn").length+" pose buttons"],
+    ["Pose controls",()=>d.querySelectorAll(".poses button").length+" pose buttons"],
     ["Minimap",()=>has("minimap")],
-    ["Results modal",()=>has("resultsModal")]
+    ["Results modal",()=>has("results")]
   ].forEach(x=>test(x[0],x[1],game));
 }
 frame.addEventListener("load",runChecks);
