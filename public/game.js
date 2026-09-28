@@ -9,7 +9,10 @@ const MAPS = [
   { id:"gallery", label:"GALLERY", url:"https://cdn.3dassets.dev/assets/35871/v1/model.glb", sky:"#e7e9e7" },
   { id:"restaurant", label:"RESTAURANT", url:"https://cdn.3dassets.dev/assets/16541/v1/model.glb", sky:"#8b776b" },
   { id:"supermarket", label:"SUPERMARKET", url:"https://cdn.3dassets.dev/assets/26952/v1/model.glb", sky:"#91a6b1" },
-  { id:"hotel", label:"HOTEL", url:"https://cdn.3dassets.dev/assets/25950/v1/model.glb", sky:"#82939f" }
+  { id:"hotel", label:"HOTEL", url:"https://cdn.3dassets.dev/assets/25950/v1/model.glb", sky:"#82939f" },
+  { id:"sewer", label:"SEWER", url:"https://cdn.3dassets.dev/assets/27259/v1/model.glb", sky:"#39464d" },
+  { id:"city", label:"CITY", url:"https://cdn.3dassets.dev/assets/29075/v1/model.glb", sky:"#6f879b" },
+  { id:"farm", label:"FARM", url:"https://cdn.3dassets.dev/assets/16895/v1/model.glb", sky:"#91a77a" }
 ];
 
 const $ = (id) => document.getElementById(id);
