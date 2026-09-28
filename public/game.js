@@ -72,7 +72,9 @@ const state = {
   paintModeOpen: false,
   fps: 60,
   frameSamples: [],
-  lastPerfHud: 0
+  lastPerfHud: 0,
+  ping: 0,
+  pingTimer: null
 };
 
 function apiSocketUrl() {
@@ -109,6 +111,10 @@ function connect() {
 
   ws.addEventListener("open", () => {
     state.reconnectAttempt = 0;
+    clearInterval(state.pingTimer);
+    state.pingTimer = setInterval(() => {
+      if (state.socket?.readyState === WebSocket.OPEN) send({type:"ping",t:performance.now()});
+    }, 2000);
     setConnection("Connected", true);
     send({
       type: "hello",
@@ -124,6 +130,8 @@ function connect() {
   });
 
   ws.addEventListener("close", () => {
+    clearInterval(state.pingTimer);
+    state.pingTimer = null;
     state.socket = null;
     if (state.room) {
       setConnection("Reconnecting…");
@@ -150,6 +158,12 @@ function handleMessage(message) {
 
   if (message.type === "rooms") {
     renderPublicRooms(message.rooms || []);
+    return;
+  }
+
+  if (message.type === "pong") {
+    state.ping = Math.max(0, Math.round(performance.now() - Number(message.t || performance.now())));
+    if ($("netReadout")) $("netReadout").textContent = state.ping + " ms";
     return;
   }
 
@@ -770,8 +784,9 @@ function updateRoom(room) {
     $("camoSurface").textContent = best?.name || "Open ground";
     $("paintCoverageValue").textContent = Math.round((self.paintCoverage||0)*100)+"%";
     $("inkFill").style.width = Math.round((self.paintCoverage||0)*100)+"%";
-    $("staminaValue").textContent = "100%";
-    $("staminaFill").style.width = "100%";
+    state.stamina = Number.isFinite(self.stamina) ? self.stamina : 100;
+    $("staminaValue").textContent = Math.round(state.stamina) + "%";
+    $("staminaFill").style.width = Math.round(state.stamina) + "%";
     buildPalette(self.color);
   } else if (room.phase === "setup") {
     $("centerPrompt").textContent = "Hiders are setting up. Stay in the gate until the timer reaches zero.";
@@ -1147,6 +1162,7 @@ function updateInput(nowTime) {
   const movingInput = Math.hypot(keysInput.forward, keysInput.strafe) > 0.05;
   if (sprintKey && movingInput && state.stamina > 0) state.stamina = Math.max(0, state.stamina - 28 * (1/60));
   else state.stamina = Math.min(100, state.stamina + 18 * (1/60));
+  if (Number.isFinite(self.stamina)) state.stamina += (self.stamina - state.stamina) * .08;
   $("staminaValue").textContent = Math.round(state.stamina) + "%";
   $("staminaFill").style.width = Math.round(state.stamina) + "%";
   let forward = keysInput.forward;
