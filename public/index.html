@@ -23,7 +23,7 @@
       <div class="divider"><span>PUBLIC ROOMS</span></div>
       <div id="publicRooms" class="room-list"><div class="muted">Looking for open rooms…</div></div>
       <p class="help">2–10 players · server-authoritative rooms · real WebSocket sync · WASD/arrows · mouse look · gamepad · paint + eyedropper.</p>
-      <p id="connection" class="connection">Connecting…</p>
+      <p id="connection" class="connection">Connecting…</p><p id="bootStatus" class="connection">Loading game systems…</p>
     </section>
   </main>
 
@@ -40,7 +40,7 @@
       </div>
       <div class="timer-card"><span>TIME</span><strong id="timer">0:00</strong></div>
       <div class="score-card"><span>★ SCORE</span><strong id="score">0</strong></div>
-      <div class="map-card"><span>MAP</span><strong id="mapLabel">—</strong></div>
+      <div class="map-card"><span>MAP</span><strong id="mapLabel">—</strong><button id="assetBtn" class="map-cycle" type="button">MAP <b>AUTO</b></button></div>
       <button id="leaveBtn" class="ghost">Leave</button>
     </div>
 
@@ -113,7 +113,7 @@
         <h2 id="resultTitle">ROUND COMPLETE</h2>
         <p id="resultReason"></p>
         <div id="resultRows"></div>
-        <button id="resultClose" class="primary full">Continue</button>
+        <div class="results-actions"><button id="playAgain" class="primary">Play Again</button><button id="resultClose" class="ghost">Back to Lobby</button></div>
       </div>
     </div>
   </main>
