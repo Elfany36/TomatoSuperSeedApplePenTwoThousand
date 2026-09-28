@@ -145,8 +145,9 @@ function roundedPlayers(players) {
 }
 
 export class GameRoom {
-  constructor(code, isPublic) {
+  constructor(code, isPublic, config = CONFIG) {
     this.code = code;
+    this.config = { ...CONFIG, ...config };
     this.public = !!isPublic;
     this.hostId = null;
     this.players = new Map();
@@ -169,7 +170,7 @@ export class GameRoom {
   }
 
   activePlayers() {
-    return [...this.players.values()].filter(p => p.connected || (now() - p.disconnectedAt < CONFIG.RECONNECT_MS));
+    return [...this.players.values()].filter(p => p.connected || (now() - p.disconnectedAt < this.config.RECONNECT_MS));
   }
 
   connectedPlayers() {
@@ -177,7 +178,7 @@ export class GameRoom {
   }
 
   addPlayer(player) {
-    if (this.players.size >= CONFIG.MAX_PLAYERS && !this.players.has(player.id)) {
+    if (this.players.size >= this.config.MAX_PLAYERS && !this.players.has(player.id)) {
       throw new Error("Room full");
     }
     if (!this.hostId) this.hostId = player.id;
@@ -195,7 +196,7 @@ export class GameRoom {
     if (this.hostId === id) {
       this.hostId = this.connectedPlayers()[0]?.id ?? this.players.keys().next().value ?? null;
     }
-    if (this.players.size < CONFIG.MIN_PLAYERS && this.phase !== "lobby") {
+    if (this.players.size < this.config.MIN_PLAYERS && this.phase !== "lobby") {
       if (this.phase === "search") {
         this.finish("hiders", "Round stopped because the room fell below two players.");
       } else {
@@ -265,7 +266,7 @@ export class GameRoom {
 
     this.phase = "setup";
     this.roundStartedAt = now();
-    this.endAt = this.roundStartedAt + CONFIG.SETUP_MS;
+    this.endAt = this.roundStartedAt + this.config.SETUP_MS;
     this.roundStats = [];
     this.roundReason = "";
 
@@ -281,7 +282,7 @@ export class GameRoom {
 
   transitionToSearch() {
     this.phase = "search";
-    this.endAt = now() + CONFIG.SEARCH_MS;
+    this.endAt = now() + this.config.SEARCH_MS;
     for (const p of this.players.values()) {
       if (p.role === "seeker") {
         const lane = [...this.players.values()].filter(x => x.role === "seeker").indexOf(p);
@@ -331,7 +332,7 @@ export class GameRoom {
 
     this.roundStats = roundStats;
     this.phase = "results";
-    this.endAt = now() + CONFIG.RESULTS_MS;
+    this.endAt = now() + this.config.RESULTS_MS;
     this.roundReason = reason;
   }
 
@@ -680,7 +681,7 @@ export class GameManager {
     if (existingId && !player) throw new Error("Player not found");
     const id = existingId || randomUUID();
     const p = player || this.makePlayer(id, name);
-    const room = new GameRoom(makeRoomCode(this.rooms), isPublic);
+    const room = new GameRoom(makeRoomCode(this.rooms), isPublic, this.config);
     room.addPlayer(p);
     this.rooms.set(room.code, room);
     return { room, player: p };
