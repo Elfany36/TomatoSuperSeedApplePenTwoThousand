@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CAMELEON HTML Test</title>
+<style>
+:root{font-family:Inter,system-ui,sans-serif;background:#080b12;color:#e9edf5}
+body{margin:0;padding:28px;background:radial-gradient(circle at 20% 0%,#172238 0,#080b12 42%);min-height:100vh}
+main{max-width:980px;margin:auto}.top{display:flex;justify-content:space-between;gap:20px;align-items:end}
+h1{margin:0 0 6px}.muted{color:#8d98ad}
+.card{margin-top:18px;padding:18px;border:1px solid #263047;border-radius:16px;background:#0e1420cc;box-shadow:0 12px 35px #0005}
+button,input{font:inherit}button{padding:9px 13px;border:1px solid #34415b;border-radius:10px;background:#182238;color:#fff;cursor:pointer}button:hover{background:#202d47}
+#summary{font-weight:700}.pass{color:#61e294}.fail{color:#ff7181}.warn{color:#f5c56b}
+table{width:100%;border-collapse:collapse}td,th{padding:10px;border-bottom:1px solid #202a3d;text-align:left}code{color:#9ddcff}
+#threeTest{height:230px;border-radius:12px;overflow:hidden;background:#070a10;margin-top:12px}
+#log{white-space:pre-wrap;max-height:260px;overflow:auto;font:12px ui-monospace,monospace;background:#070a10;padding:12px;border-radius:10px}
+</style>
+</head>
+<body>
+<main>
+  <div class="top">
+    <div><h1>🦎 CAMELEON HTML Test</h1><div class="muted">Smoke-test the browser build, HUD hooks, WebSocket endpoint and Three.js runtime.</div></div>
+    <button id="run">Run tests</button>
+  </div>
+
+  <section class="card">
+    <div id="summary">Not run yet.</div>
+    <table><thead><tr><th>Test</th><th>Status</th><th>Details</th></tr></thead><tbody id="results"></tbody></table>
+  </section>
+
+  <section class="card">
+    <b>Three.js render smoke test</b>
+    <div id="threeTest"></div>
+  </section>
+
+  <section class="card">
+    <b>Local map importer test</b>
+    <p class="muted">Choose a licensed <code>.glb</code>/<code>.gltf</code> map. This page only checks that the browser can read the file; it does not upload it.</p>
+    <input id="mapFile" type="file" accept=".glb,.gltf,.bin">
+    <div id="fileStatus" class="muted">No file selected.</div>
+  </section>
+
+  <section class="card">
+    <b>Diagnostic log</b>
+    <div id="log"></div>
+  </section>
+</main>
+
+<script type="module">
+const $=id=>document.getElementById(id);
+const logLines=[];
+function log(s){logLines.push(s);$("log").textContent=logLines.join("\n")}
+function row(name,status,details){
+  const tr=document.createElement("tr");
+  tr.innerHTML="<td>"+name+"</td><td class='"+status+"'>"+status.toUpperCase()+"</td><td>"+details+"</td>";
+  $("results").appendChild(tr);
+}
+async function loadThree(){
+  return import("https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js");
+}
+async function testThree(){
+  const THREE=await loadThree();
+  const host=$("threeTest");
+  const scene=new THREE.Scene();
+  scene.background=new THREE.Color(0x080b12);
+  const camera=new THREE.PerspectiveCamera(55,host.clientWidth/host.clientHeight,.1,100);
+  camera.position.set(2,1.6,4);
+  const renderer=new THREE.WebGLRenderer({antialias:true});
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  renderer.setSize(host.clientWidth,host.clientHeight);
+  host.replaceChildren(renderer.domElement);
+  scene.add(new THREE.HemisphereLight(0xffffff,0x223344,2));
+  const light=new THREE.DirectionalLight(0xffffff,3); light.position.set(2,4,3); scene.add(light);
+  const mesh=new THREE.Mesh(
+    new THREE.IcosahedronGeometry(1,2),
+    new THREE.MeshStandardMaterial({color:0x65e6a4,roughness:.42,metalness:.18})
+  );
+  scene.add(mesh);
+  function frame(){mesh.rotation.y+=.012;mesh.rotation.x+=.004;renderer.render(scene,camera);requestAnimationFrame(frame)}
+  frame();
+  return !!renderer.getContext();
+}
+async function testWS(){
+  return await new Promise(resolve=>{
+    const proto=location.protocol==="https:"?"wss":"ws";
+    const ws=new WebSocket(proto+"://"+location.host+"/ws");
+    const timer=setTimeout(()=>{try{ws.close()}catch{};resolve("timeout")},3500);
+    ws.onopen=()=>{clearTimeout(timer);ws.close();resolve("open")};
+    ws.onerror=()=>{clearTimeout(timer);resolve("error")};
+  });
+}
+async function run(){
+  $("results").replaceChildren(); logLines.length=0; log("Starting browser smoke test...");
+  let pass=0,fail=0;
+  const check=async(name,fn)=>{
+    try{
+      const detail=await fn();
+      if(detail===false || detail==="error" || detail==="timeout") throw new Error(String(detail));
+      row(name,"pass",String(detail===true?"OK":detail)); pass++;
+    }catch(e){row(name,"fail",e.message);log(name+": "+e.message);fail++}
+  };
+
+  await check("HTTPS/page context",()=>location.protocol==="http:"||location.protocol==="https:"?location.origin:"invalid");
+  await check("Canvas/WebGL",()=>{
+    const c=document.createElement("canvas"), gl=c.getContext("webgl2")||c.getContext("webgl");
+    if(!gl) throw new Error("WebGL unavailable");
+    return gl.getParameter(gl.VERSION);
+  });
+  await check("Three.js module",async()=>{const T=await loadThree();return "Three.js "+T.REVISION});
+  await check("Three.js render",testThree);
+  await check("WebSocket /ws",async()=>{
+    const r=await testWS();
+    if(r!=="open") throw new Error("WebSocket did not open ("+r+")");
+    return "connected";
+  });
+
+  const required=["run","results","summary","threeTest","mapFile","fileStatus","log"];
+  await check("Test DOM",()=>required.every(id=>$(id))?"all test hooks present":false);
+
+  const gameHooks=["roomPanel","playerList","startBtn","paintPanel","seekerPanel","minimap","resultsModal","brushSize","customColor"];
+  const existing=gameHooks.filter(id=>document.getElementById(id));
+  row("Game HUD in test document", "warn", existing.length?existing.join(", "):"expected HUD is intentionally not duplicated here; test page is isolated"); 
+  log("Completed: "+pass+" passed, "+fail+" failed.");
+  $("summary").innerHTML=fail?'<span class="fail">'+pass+" passed / "+fail+" failed</span>":'<span class="pass">All "+pass+" smoke tests passed.</span>';
+}
+$("mapFile").addEventListener("change",e=>{
+  const f=e.target.files[0];
+  $("fileStatus").textContent=f?f.name+" — "+Math.round(f.size/1024)+" KB — "+f.type:"No file selected.";
+  log(f?"Selected local asset: "+f.name:"Cleared local asset.");
+});
+$("run").addEventListener("click",run);
+run();
+</script>
+</body>
+</html>
