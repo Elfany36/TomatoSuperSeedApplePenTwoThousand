@@ -995,8 +995,7 @@ function guardConnection(action) {
   state.pendingAction = action;
   toast("Connecting to game server…", 1800);
   ensureScene();
-  ensureScene();
-connect();
+  connect();
   return false;
 }
 $("privateBtn").addEventListener("click", () => guardConnection(() => createRoom(false)));
@@ -1479,4 +1478,5 @@ function frame(time) {
   if(state.renderer&&state.scene&&state.camera)state.renderer.render(state.scene,state.camera);
 }
 
+ensureScene();
 connect();
