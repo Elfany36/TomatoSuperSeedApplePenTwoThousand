@@ -106,6 +106,14 @@ function setConnection(text, good = false) {
   $("connection").style.color = good ? "#65e6ba" : "#ffffff80";
 }
 
+window.addEventListener("error",event=>{
+  console.error("[CAMELEON]",event.error||event.message);
+  if($("bootStatus"))$("bootStatus").textContent="Runtime error · "+String(event.message||"unknown").slice(0,72);
+});
+window.addEventListener("unhandledrejection",event=>{
+  console.error("[CAMELEON]",event.reason);
+  if($("bootStatus"))$("bootStatus").textContent="Async error · "+String(event.reason?.message||event.reason||"unknown").slice(0,72);
+});
 function connect() {
   if (state.socket && state.socket.readyState <= WebSocket.OPEN) return;
   setConnection("Connecting…");
