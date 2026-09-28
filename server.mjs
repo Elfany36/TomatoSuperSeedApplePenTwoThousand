@@ -39,6 +39,7 @@ const ACCELERATION = 15;
 const DECELERATION = 22;
 const SPOT_HALF_FOV = 35 * Math.PI / 180;
 const SPOT_MIN_DOT = Math.cos(SPOT_HALF_FOV);
+const MAP_IDS = ["grove","backrooms","gallery","restaurant","supermarket","hotel","sewer","city","farm"];
 
 const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 const now = () => Date.now();
@@ -163,6 +164,7 @@ export class GameRoom {
     this.createdAt = now();
     this.joinCounter = 0;
     this.roundReason = "";
+    this.mapId = "grove";
   }
 
   activePlayers() {
@@ -215,6 +217,7 @@ export class GameRoom {
     if (this.phase !== "lobby" && this.phase !== "results") throw new Error("Round already running");
     this.round += 1;
     this.roundId = randomUUID();
+    if (!MAP_IDS.includes(this.mapId)) this.mapId = MAP_IDS[0];
     this.completed = false;
     this.winnerRole = null;
     this.endReason = null;
@@ -265,6 +268,14 @@ export class GameRoom {
     this.roundStats = [];
     this.roundReason = "";
 
+  }
+
+  setMap(mapId) {
+    if (this.phase !== "lobby") return { ok: false, reason: "round_running" };
+    const id = String(mapId || "").toLowerCase();
+    if (!MAP_IDS.includes(id)) return { ok: false, reason: "unknown_map" };
+    this.mapId = id;
+    return { ok: true, mapId: id };
   }
 
   transitionToSearch() {
@@ -344,6 +355,10 @@ export class GameRoom {
       }
       if (timestamp - p.lastInputAt > 350) p.input = { x: 0, z: 0, sprint: false };
       if (this.phase === "setup" && p.role === "seeker") p.input = { x: 0, z: 0, sprint: false };
+      if (p.attached && p.input.sprint) {
+        p.attached = false;
+        p.pose = "stand";
+      }
       const disabled = p.attached || p.frozenUntil > timestamp;
       if (disabled) p.input = { x: 0, z: 0, sprint: false };
 
@@ -599,6 +614,7 @@ export class GameRoom {
         ? ([...this.roundStats].some(s => s.role === "hider" && s.delta > 0) ? "hiders" : "seekers")
         : null,
       reason: this.roundReason,
+      mapId: this.mapId,
       aiCoach: this.aiCoach(viewerId)
     };
   }
@@ -835,6 +851,18 @@ export class GameManager {
     if (parsed.type === "clone_delete") {
       const result = room.deleteClones(current.id);
       if (result.ok) this.broadcastRoom(room);
+      return;
+    }
+
+    if (parsed.type === "map_select") {
+      try {
+        if (room.hostId !== current.id) throw new Error("Only the room host can change the map");
+        const result = room.setMap(parsed.mapId);
+        if (!result.ok) throw new Error(result.reason === "round_running" ? "Map can only be changed in the lobby." : "Unknown map");
+        this.broadcastRoom(room);
+      } catch (error) {
+        this.send(current, { type: "error", message: error.message });
+      }
       return;
     }
 
