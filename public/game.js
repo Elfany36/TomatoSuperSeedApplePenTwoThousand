@@ -524,6 +524,14 @@ function makePlayerMesh(player) {
     const foot=new THREE.Mesh(new THREE.SphereGeometry(.17,11,8),bodyMat.clone());
     foot.scale.set(1,.54,1.25); foot.position.set(x*.7,.18,z*.9); foot.castShadow=true; group.add(foot);
   }
+  const arms=[];
+  for(const x of[-1,1]){
+    const arm=new THREE.Mesh(new THREE.CylinderGeometry(.09,.12,.48,8),accent.clone());
+    arm.position.set(x*.73,1.02,-.02);
+    arm.rotation.z=x<0?-.16:.16;
+    arm.castShadow=true; group.add(arm); arms.push(arm);
+  }
+
 
   const curve=new THREE.CatmullRomCurve3([
     new THREE.Vector3(0,.7,.75),new THREE.Vector3(.22,.56,1.16),
@@ -539,40 +547,46 @@ function makePlayerMesh(player) {
   const legs = group.children.filter(o => o.geometry?.type === "CylinderGeometry");
   state.playerGroup.add(group);
   const entry={group,mats:[bodyMat,head.material,tail.material],accent,band,target:new THREE.Vector3(player.x||0,0,player.z||0),
-    lastX:player.x||0,lastZ:player.z||0,body,head,tail,legs};
+    lastX:player.x||0,lastZ:player.z||0,body,head,tail,legs,arms};
   state.players.set(player.id, entry);
   return entry;
 }
 
 function setPlayerStyle(entry, player) {
-  const color = player.role==="seeker" ? "#8E7CFF" : (player.color||"#FFFFFF");
+  const color=player.role==="seeker"?"#8E7CFF":(player.color||"#FFFFFF");
   entry.mats.forEach(mat=>{
     mat.color.set(color);
     if(player.metallic!=null) mat.metalness=player.metallic;
     if(player.roughness!=null) mat.roughness=player.roughness;
   });
-  entry.accent.color.set(player.role==="seeker" ? "#CEC7FF" : "#DDEBE6");
-  entry.band.material.color.set(player.found ? "#FF667D" : player.role==="seeker" ? "#FFD166" : "#65E6BA");
+  entry.accent.color.set(player.role==="seeker"?"#CEC7FF":"#DDEBE6");
+  entry.band.material.color.set(player.found?"#FF667D":player.role==="seeker"?"#FFD166":"#65E6BA");
   const pose=player.pose||"stand";
-  entry.group.scale.set(1, pose==="crouch"?.72:pose==="curl"?.56:pose==="freeze"?.48:pose==="prone"?.42:1, pose==="prone"?1.15:1);
-  entry.group.rotation.z=pose==="curl"?.16:pose==="lean"?.22:pose==="slant"?-.18:0;
-  entry.group.rotation.x=pose==="backbend"?-.28:0;
-  entry.group.position.y=pose==="wallflat"?.2:0;
+  const ground=["starfish","lieflat","ball"].includes(pose);
+  entry.group.scale.set(1,ground?.82:(pose==="crouch"?.72:pose==="curl"?.56:pose==="freeze"?.48:1),ground?1.1:(pose==="prone"?1.15:1));
+  entry.group.position.y=ground?.15:(pose==="sit"?-.32:pose==="wallflat"?.18:0);
+  entry.group.rotation.x=ground?Math.PI/2:(pose==="backbend"?-.28:0);
+  entry.group.rotation.z=pose==="curl"?.18:pose==="lean"?.24:pose==="slant"?-.18:0;
+  entry.arms[0].rotation.set(0,0,-.16); entry.arms[1].rotation.set(0,0,.16);
+  entry.legs.forEach((leg,i)=>{leg.rotation.set(0,0,i%2? .1:-.1);});
+  const armZ={tpose:[-1.45,1.45],armsup:[-2.88,2.88],armsfwd:[-.16,-.16],legsout:[-.47,.47],star:[-2.18,2.18],starfish:[-2.18,2.18],ball:[-.2,-.2],sit:[-.08,-.08]};
+  if(armZ[pose]){entry.arms[0].rotation.z=armZ[pose][0];entry.arms[1].rotation.z=armZ[pose][1];}
+  if(pose==="armsfwd"){entry.arms.forEach(a=>a.rotation.x=-Math.PI/2);}
+  if(["legsout","star","starfish"].includes(pose)){entry.legs[0].rotation.z=-.5;entry.legs[1].rotation.z=.5;}
+  if(pose==="ball"){entry.legs[0].rotation.x=-2.3;entry.legs[1].rotation.x=-2.3;}
 }
 
-function animatePlayer(entry, player, time){
-  const dx=(player.x??entry.lastX)-entry.lastX;
-  const dz=(player.z??entry.lastZ)-entry.lastZ;
-  const moving=Math.hypot(dx,dz)>0.003 && !player.found;
-  entry.lastX=player.x??entry.lastX;
-  entry.lastZ=player.z??entry.lastZ;
-  const rate=moving?(player.role==='seeker' ? 8 : 7):2.5;
-  const wave=Math.sin(time*0.001*rate);
-  const bob=moving?Math.abs(wave)*0.045:Math.sin(time*0.001*2.5)*0.012;
-  entry.body.position.y=0.82+bob;
-  entry.head.position.y=1.74+bob*0.65;
-  entry.tail.rotation.y=(moving?wave*0.18:wave*0.03);
-  entry.legs.forEach((leg,i)=>{if(i<4) leg.rotation.x=moving?((i%2?-1:1)*wave*0.32):0;});
+function animatePlayer(entry,player,time){
+  const dx=(player.x??entry.lastX)-entry.lastX, dz=(player.z??entry.lastZ)-entry.lastZ;
+  const moving=Math.hypot(dx,dz)>0.003&&!player.found&&!["freeze","wallflat","starfish","lieflat","ball"].includes(player.pose);
+  entry.lastX=player.x??entry.lastX; entry.lastZ=player.z??entry.lastZ;
+  const rate=player.role==="seeker"?8:7;
+  const wave=Math.sin(time*.001*rate);
+  const bob=moving?Math.abs(wave)*.045:Math.sin(time*.001*2.5)*.012;
+  entry.body.position.y=.82+bob;
+  entry.head.position.y=1.74+bob*.65;
+  entry.tail.rotation.y=moving?wave*.18:wave*.03;
+  entry.legs.forEach((leg,i)=>{if(i<4 && !["starfish","lieflat","ball"].includes(player.pose)) leg.rotation.x=moving?((i%2?-1:1)*wave*.32):0;});
 }
 
 function updatePlayers(room) {
