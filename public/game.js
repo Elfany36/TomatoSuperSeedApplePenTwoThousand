@@ -1,7 +1,7 @@
 
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js";
 import { SURFACES, WORLD_BOUNDS, STATIC_WORLD } from "./world.js";
-import { GLTFLoader } from "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/loaders/GLTFLoader.js";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 const MAPS = [
   { id:"grove", label:"GROVE", url:"https://cdn.3dassets.dev/assets/38765/v1/model.glb", sky:"#8fb7bd" },
@@ -56,7 +56,12 @@ const state = {
   assetKey: "grove",
   assetCache: new Map(),
   hopUntil: 0,
-  scanCooldownUntil: 0
+  scanCooldownUntil: 0,
+  cameraMode: "third",
+  pitch: -0.05,
+  stamina: 100,
+  lastRound: -1,
+  pointerLocked: false
 };
 
 function apiSocketUrl() {
@@ -296,14 +301,17 @@ function addBox(parent, x, y, z, w, h, d, color, surface, extra = {}) {
   return mesh;
 }
 
+function indexSampleMeshes(root){
+  state.sampleMeshes=[];
+  root.traverse(o=>{ if(o.isMesh && o.userData?.sampleColor) state.sampleMeshes.push(o); });
+}
+
 function importAssetSurface(mesh){
-  let color = "#B8B8B8";
-  const m = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
-  if(m?.color){
-    const v=m.color;
-    color="#"+[v.r*255,v.g*255,v.b*255].map(n=>Math.max(0,Math.min(255,Math.round(n))).toString(16).padStart(2,"0")).join("");
-  }
+  let color="#B8B8B8";
+  const m=Array.isArray(mesh.material)?mesh.material[0]:mesh.material;
+  if(m?.color){const v=m.color;color="#"+[v.r*255,v.g*255,v.b*255].map(n=>Math.max(0,Math.min(255,Math.round(n))).toString(16).padStart(2,"0")).join("");}
   mesh.userData.sampleColor=color;
+  mesh.userData.surfaceId=mesh.userData.surfaceId||("asset:"+mesh.uuid);
   mesh.userData.surfaceName=mesh.name||"Environment surface";
   mesh.castShadow=true; mesh.receiveShadow=true;
 }
@@ -312,6 +320,7 @@ function attachMap(root,key){
   state.assetGroup.clear();
   const clone=root.clone(true);
   clone.traverse(o=>{if(o.isMesh)importAssetSurface(o)});
+  indexSampleMeshes(clone);
   const box=new THREE.Box3().setFromObject(clone);
   const size=box.getSize(new THREE.Vector3());
   const center=box.getCenter(new THREE.Vector3());
@@ -340,6 +349,7 @@ function loadMapForRound(round){
   },undefined,()=>{
     state.assetGroup.visible=false;
     state.worldGroup.visible=true;
+    indexSampleMeshes(state.worldGroup);
     toast(`${key.label} asset unavailable — using optimized fallback scene.`,3200);
     if($("assetBtn"))$("assetBtn").innerHTML='MAP <b>FALLBACK</b>';
   });
