@@ -131,3 +131,43 @@ aiRoom.transitionToSearch();
 const seekerCoach=aiRoom.stateFor(aiSeeker.id).aiCoach;
 assert.equal(typeof seekerCoach.hint,"string");
 console.log("adaptive AI coach checks passed");
+
+
+const systemRoom = new GameRoom("SYS01", false);
+const sysHost = gm.makePlayer("sys-host", "Host");
+const sysGuest = gm.makePlayer("sys-guest", "Guest");
+systemRoom.addPlayer(sysHost);
+systemRoom.addPlayer(sysGuest);
+assert.equal(systemRoom.mapId, "grove");
+assert.equal(systemRoom.setMap("gallery").ok, true);
+assert.equal(systemRoom.mapId, "gallery");
+systemRoom.startRound();
+assert.equal(systemRoom.stateFor(sysHost.id).mapId, "gallery");
+assert.equal(systemRoom.setMap("farm").ok, false);
+
+const sysHider = [...systemRoom.players.values()].find(p => p.role === "hider");
+const coverageBeforeMaterial = sysHider.paintCoverage;
+const materialUpdate = systemRoom.customize(sysHider.id, {
+  color: "#FFFFFF",
+  pose: sysHider.pose,
+  metallic: 0.4,
+  roughness: 0.5,
+  pattern: "edge",
+  surfaceId: "material"
+});
+assert.equal(materialUpdate.ok, true);
+assert.equal(sysHider.paintCoverage, coverageBeforeMaterial);
+
+sysHider.input = { x: 1, z: 0, sprint: false };
+sysHider.lastInputAt = Date.now() - 1000;
+const staleX = sysHider.x;
+systemRoom.update(0.1);
+assert.equal(sysHider.x, staleX);
+
+sysHider.attached = true;
+sysHider.pose = "wallflat";
+sysHider.input = { x: 0, z: 0, sprint: true };
+sysHider.lastInputAt = Date.now();
+systemRoom.update(0.05);
+assert.equal(sysHider.attached, false);
+console.log("map authority, paint accounting, stale input and wall detach checks passed");
