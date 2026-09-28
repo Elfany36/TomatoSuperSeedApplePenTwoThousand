@@ -976,7 +976,8 @@ window.addEventListener("keyup", event => { keys[event.code] = false; });
 function guardConnection() {
   if (state.socket?.readyState === WebSocket.OPEN) return true;
   toast("Connecting to game server…", 1800);
-  connect();
+  ensureScene();
+connect();
   return false;
 }
 $("privateBtn").addEventListener("click", () => { if (guardConnection()) createRoom(false); });
