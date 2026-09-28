@@ -287,13 +287,15 @@ function ensureScene() {
   state.renderer.toneMappingExposure = 1.12;
   state.renderer.shadowMap.enabled = true;
   state.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  state.renderer.shadowMap.autoUpdate = true;
+  state.renderer.info.autoReset = true;
 
   const hemi = new THREE.HemisphereLight("#F2FBFF", "#385545", 2.2);
   state.scene.add(hemi);
   const sun = new THREE.DirectionalLight("#FFF0CF", 3.4);
   sun.position.set(-14, 26, 12);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(1024, 1024);
+  sun.shadow.mapSize.set(2048, 2048);
   sun.shadow.camera.left = -30; sun.shadow.camera.right = 30;
   sun.shadow.camera.top = 28; sun.shadow.camera.bottom = -28;
   state.scene.add(sun);
@@ -363,12 +365,7 @@ function attachMap(root,key){
   const clone=root.clone(true);
   clone.traverse(o=>{if(o.isMesh)importAssetSurface(o)});
   indexSampleMeshes(clone);
-  const box=new THREE.Box3().setFromObject(clone);
-  const size=box.getSize(new THREE.Vector3());
-  const center=box.getCenter(new THREE.Vector3());
-  const fit=Math.min(1.6,34/Math.max(1,size.x),25/Math.max(1,size.z));
-  clone.scale.setScalar(fit);
-  clone.position.set(-center.x*fit,-box.min.y*fit,-center.z*fit);
+  normalizeMapAsset(clone,38,28,10);
   state.assetGroup.add(clone);
   state.assetGroup.visible=true;
   state.worldGroup.visible=false;
@@ -418,6 +415,29 @@ function buildAtmosphere(key){
   const color=key==="sewer"?"#66E6C2":key==="backrooms"?"#FFF0B0":"#FFFFFF";
   state.ambientPoints=new THREE.Points(geo,new THREE.PointsMaterial({color,size:key==="sewer"?.055:.045,transparent:true,opacity:key==="sewer"?.24:.18,depthWrite:false}));state.effectGroup.add(state.ambientPoints);
 }
+function normalizeMapAsset(root,targetWidth=38,targetDepth=28,targetHeight=10){
+  root.updateMatrixWorld(true);
+  const before=new THREE.Box3().setFromObject(root);
+  const size=before.getSize(new THREE.Vector3());
+  const fit=Math.min(targetWidth/Math.max(size.x,1),targetDepth/Math.max(size.z,1),targetHeight/Math.max(size.y,1));
+  const safeFit=Math.min(2.5,Math.max(.012,fit));
+  root.scale.setScalar(safeFit);
+  root.updateMatrixWorld(true);
+  const after=new THREE.Box3().setFromObject(root);
+  const center=after.getCenter(new THREE.Vector3());
+  root.position.x+=-center.x;root.position.z+=-center.z;root.position.y+=-after.min.y;
+  root.updateMatrixWorld(true);
+  root.traverse(o=>{
+    if(!o.isMesh)return;
+    o.castShadow=true;o.receiveShadow=true;
+    const mats=Array.isArray(o.material)?o.material:[o.material];
+    for(const mat of mats){
+      if(mat?.map){mat.map.anisotropy=Math.min(8,state.renderer?.capabilities.getMaxAnisotropy?.()||1);mat.map.needsUpdate=true;}
+      if(mat){mat.roughness=Math.max(.18,mat.roughness??.6);mat.needsUpdate=true;}
+    }
+  });
+  return safeFit;
+}
 function loadMapForRound(round){
   const map=MAPS[Math.max(0,(round||1)-1)%MAPS.length];
   state.assetKey=map.id;
@@ -457,12 +477,7 @@ function loadLocalMap(file){
       const clone=g.scene.clone(true);
       clone.traverse(o=>{if(o.isMesh)importAssetSurface(o)});
       indexSampleMeshes(clone);
-      const box=new THREE.Box3().setFromObject(clone);
-      const size=box.getSize(new THREE.Vector3());
-      const center=box.getCenter(new THREE.Vector3());
-      const fit=Math.min(1.6,34/Math.max(1,size.x),25/Math.max(1,size.z));
-      clone.scale.setScalar(fit);
-      clone.position.set(-center.x*fit,-box.min.y*fit,-center.z*fit);
+      normalizeMapAsset(clone,38,28,10);
       state.assetGroup.add(clone);
       state.assetGroup.visible=true; state.worldGroup.visible=false;
       playGltfAnimations(clone,g.animations||[]);
