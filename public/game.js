@@ -972,12 +972,8 @@ window.addEventListener("keydown", event => {
 });
 window.addEventListener("keyup", event => { keys[event.code] = false; });
 
-$("privateBtn").addEventListener("click", () => createRoom(false));
-$("publicBtn").addEventListener("click", () => createRoom(true));
-$("joinBtn").addEventListener("click", joinRoom);
-
 // Give clear feedback instead of making disconnected buttons appear dead.
-function guardConnection(action) {
+function guardConnection() {
   if (state.socket?.readyState === WebSocket.OPEN) return true;
   toast("Connecting to game server…", 1800);
   connect();
