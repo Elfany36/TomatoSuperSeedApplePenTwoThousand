@@ -61,7 +61,8 @@ const state = {
   pitch: -0.05,
   stamina: 100,
   lastRound: -1,
-  pointerLocked: false
+  pointerLocked: false,
+  paintModeOpen: false
 };
 
 function apiSocketUrl() {
@@ -799,7 +800,7 @@ window.addEventListener("keydown", event => {
     state.cameraMode=state.cameraMode==="first"?"third":"first";
     toast("Camera: "+state.cameraMode.toUpperCase());
   }
-  if (event.code === "KeyR") { state.input.yaw = currentSelf()?.role==="seeker" ? Math.PI : state.input.yaw; toast("Camera recentered"); }
+  if (event.code === "KeyF" && currentSelf()?.role==="hider" && state.room?.phase==="setup") { state.paintModeOpen=!state.paintModeOpen; $("camoPanel").hidden=!state.paintModeOpen; toast(state.paintModeOpen?"Paint mode ON":"Paint mode OFF"); }
 });
 window.addEventListener("keyup", event => { keys[event.code] = false; });
 
@@ -950,6 +951,7 @@ function spotAtPointer(event) {
 
 $("scene").addEventListener("pointerdown",event=>{
   if(event.button===2){state.mouseLook=true;initAudio();return;}
+  if(event.button===1 && currentSelf()?.role==="hider" && state.room?.phase==="setup"){state.brushMode="dropper";$("dropperTool")?.classList.add("active");$("brushTool")?.classList.remove("active");sampleAtPointer(event);event.preventDefault();return;}
   if(event.button===0 && currentSelf()?.role==="seeker" && state.room?.phase==="search"){
     try{$("scene").requestPointerLock();}catch{}
   }
