@@ -176,7 +176,7 @@ function handleMessage(message) {
     if (message.success) {
       playSpotSound();
       const target = state.room?.players.find(p => p.id === message.targetId);
-      toast((target?.name || "A hider") + " was spotted!", 2800);
+      toast(message.clone ? "Decoy clone destroyed." : ((target?.name || "A hider") + " was spotted!"), 2800);
     }
     return;
   }
@@ -964,7 +964,8 @@ function spotAtPointer(event) {
 
   let candidate = null;
   let nearest = 0.13;
-  for (const player of state.room.players) {
+  const targets=[...state.room.players,...(state.room.clones||[])];
+  for (const player of targets) {
     if (player.role !== "hider" || player.found || !Number.isFinite(player.x)) continue;
     const projected = new THREE.Vector3(player.x, 1.1, player.z).project(state.camera);
     const distance = Math.hypot(projected.x - pointer.x, projected.y - pointer.y);
