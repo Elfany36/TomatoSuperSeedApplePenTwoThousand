@@ -215,7 +215,7 @@ export class GameRoom {
 
   startRound() {
     const players = this.activePlayers();
-    if (players.length < CONFIG.MIN_PLAYERS) throw new Error("Need at least 2 players");
+    if (players.length < this.config.MIN_PLAYERS) throw new Error("Need at least 2 players");
     if (this.phase !== "lobby" && this.phase !== "results") throw new Error("Round already running");
     this.round += 1;
     this.roundId = randomUUID();
