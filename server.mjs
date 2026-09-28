@@ -161,6 +161,7 @@ export class GameRoom {
     this.endedAt = null;
     this.roundStats = [];
     this.lastBroadcast = 0;
+    this.lastDirectoryBroadcast = 0;
     this.createdAt = now();
     this.joinCounter = 0;
     this.roundReason = "";
@@ -1030,7 +1031,11 @@ export class GameManager {
       }
       if (room.players.size === 0) this.rooms.delete(room.code);
     }
-    this.broadcastDirectory();
+
+    if (timestamp - this.lastDirectoryBroadcast >= 500) {
+      this.lastDirectoryBroadcast = timestamp;
+      this.broadcastDirectory();
+    }
   }
 }
 
