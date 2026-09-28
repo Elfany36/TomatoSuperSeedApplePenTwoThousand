@@ -76,7 +76,8 @@ const state = {
   ping: 0,
   pingTimer: null,
   painting: false,
-  lastPaintAt: 0
+  lastPaintAt: 0,
+  assetLoadToken: 0
 };
 
 function apiSocketUrl() {
@@ -447,14 +448,22 @@ function loadMapForRound(round){
   const cached=state.assetCache.get(map.id);
   if(cached){ attachMap(cached.scene,map.id); return; }
   if($("assetBtn"))$("assetBtn").innerHTML='<b>LOADING…</b>';
-  new GLTFLoader().load(map.url,g=>{
+  const token=++state.assetLoadToken;
+  const timeout=setTimeout(()=>{
+    if(token!==state.assetLoadToken)return;
+    state.assetGroup.visible=false;state.worldGroup.visible=true;indexSampleMeshes(state.worldGroup);
+    if($("bootStatus"))$("bootStatus").textContent=map.label+" timed out · fallback scene active";
+    if($("assetBtn"))$("assetBtn").innerHTML='<b>FALLBACK</b>';
+    toast(map.label+" asset timed out; fallback scene active.",3200);
+  },12000);
+  new GLTFLoader().load(map.url,g=>{clearTimeout(timeout);
     state.assetCache.set(map.id,{scene:g.scene,animations:g.animations||[]});
     playGltfAnimations(g.scene,g.animations||[],map.id);
     attachMap(g.scene,map.id);
     if($("bootStatus"))$("bootStatus").textContent=map.label+" environment loaded";
   },xhr=>{
     if($("bootStatus")&&xhr?.total)$("bootStatus").textContent=map.label+" "+Math.round(xhr.loaded/xhr.total*100)+"%";
-  },()=>{
+  },()=>{clearTimeout(timeout);
     state.assetGroup.visible=false;
     state.worldGroup.visible=true;
     indexSampleMeshes(state.worldGroup);
