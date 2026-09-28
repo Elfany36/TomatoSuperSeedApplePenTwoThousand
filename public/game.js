@@ -825,8 +825,7 @@ function sampleAtPointer(event) {
     playSampleSound();
     return;
   }
-  const nextCoverage = Math.min(1,(self.paintCoverage||0)+0.08+state.brushSize*0.045);
-  send({ type: "customize", color: state.selectedColor || color, pose: self.pose, brushSize: state.brushSize, surfaceId, paintCoverage: nextCoverage });
+  send({ type: "customize", color: state.selectedColor || color, pose: self.pose, brushSize: state.brushSize, surfaceId });
   spawnSampleEffect(hit.point,state.selectedColor||color);
   spawnSampleEffect(hit.point, color);
 }
@@ -1077,7 +1076,7 @@ function useAbility() {
     state.scanCooldownUntil=performance.now()+6500;
     send({type:"ability",ability:"scan"});
   } else if(self.role==="hider" && state.room?.phase==="setup"){
-    send({type:"customize",color:self.color,pose:"freeze",brushSize:state.brushSize,paintCoverage:self.paintCoverage||0,surfaceId:"freeze"});
+    send({type:"customize",color:self.color,pose:"freeze",brushSize:state.brushSize,surfaceId:"freeze"});
   }
 }
 function sendTaunt(){if(currentSelf())send({type:"ability",ability:"taunt"})}
