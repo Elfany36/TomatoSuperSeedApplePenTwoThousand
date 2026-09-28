@@ -1,6 +1,6 @@
 
 import express from "express";
-import { createServer } from "node:http";
+import { createServer as createHttpServer } from "node:http";
 import { randomBytes, randomUUID } from "node:crypto";
 import { WebSocketServer } from "ws";
 import { fileURLToPath } from "node:url";
@@ -844,7 +844,7 @@ export function createServer() {
   }));
   app.get("/api/rooms", (_req, res) => res.json({ rooms: manager.directory() }));
 
-  const server = createServer(app);
+  const server = createHttpServer(app);
   const wss = new WebSocketServer({ server, path: "/ws" });
 
   wss.on("connection", ws => {
