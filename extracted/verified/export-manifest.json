@@ -1,0 +1,17 @@
+{
+  "generatedAt": "2026-09-27T16:31:38.3897083+00:00",
+  "indexedFiles": 14285,
+  "uePackages": 6549,
+  "requiredAesKeys": 0,
+  "exports": [
+    {
+      "path": "Chameleon/Content/Blueprints/cLeon/BP_GameMode_cLeon.uasset",
+      "bytes": 154219,
+      "header": "00000000D86700006C01000000000000",
+      "format": "decoded-IoStore-package-stream",
+      "files": [
+        "Chameleon/Content/Blueprints/cLeon/BP_GameMode_cLeon.uasset"
+      ]
+    }
+  ]
+}

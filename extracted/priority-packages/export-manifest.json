@@ -1,0 +1,71 @@
+{
+  "generatedAt": "2026-09-27T16:14:42.2745788+00:00",
+  "indexedFiles": 14285,
+  "uePackages": 6549,
+  "requiredAesKeys": 0,
+  "exports": [
+    {
+      "path": "Chameleon/Content/Blueprints/cLeon/BP_GameMode_cLeon.uasset",
+      "bytes": 154219,
+      "header": "00000000D86700006C01000000000000",
+      "format": "IoStore-or-cooked",
+      "files": [
+        "Chameleon/Content/Blueprints/cLeon/BP_GameMode_cLeon.uasset"
+      ]
+    },
+    {
+      "path": "Chameleon/Content/Blueprints/cLeon/BP_FirstPersonPlayerState_Online_cLeon.uasset",
+      "bytes": 28682,
+      "header": "00000000F12900008100000000000000",
+      "format": "IoStore-or-cooked",
+      "files": [
+        "Chameleon/Content/Blueprints/cLeon/BP_FirstPersonPlayerState_Online_cLeon.uasset"
+      ]
+    },
+    {
+      "path": "Chameleon/Content/Blueprints/cLeon/BP_SpectatePawn_cLeon.uasset",
+      "bytes": 40131,
+      "header": "00000000AC3F0000C200000000000000",
+      "format": "IoStore-or-cooked",
+      "files": [
+        "Chameleon/Content/Blueprints/cLeon/BP_SpectatePawn_cLeon.uasset"
+      ]
+    },
+    {
+      "path": "Chameleon/Content/Blueprints/cLeon/MapDatas/DA_cLeonMap_0.uasset",
+      "bytes": 720,
+      "header": "00000000990200000500000001000000",
+      "format": "IoStore-or-cooked",
+      "files": [
+        "Chameleon/Content/Blueprints/cLeon/MapDatas/DA_cLeonMap_0.uasset"
+      ]
+    },
+    {
+      "path": "Chameleon/Content/Blueprints/SaveGame/BP_SaveGame.uasset",
+      "bytes": 1797,
+      "header": "00000000380400001300000000000000",
+      "format": "IoStore-or-cooked",
+      "files": [
+        "Chameleon/Content/Blueprints/SaveGame/BP_SaveGame.uasset"
+      ]
+    },
+    {
+      "path": "Chameleon/Content/FirstPerson/Input/IMC_cLeonDefault.uasset",
+      "bytes": 2251,
+      "header": "000000000A0700001100000000000000",
+      "format": "IoStore-or-cooked",
+      "files": [
+        "Chameleon/Content/FirstPerson/Input/IMC_cLeonDefault.uasset"
+      ]
+    },
+    {
+      "path": "Chameleon/Content/OnlineSystems/Matching/BP_Matchmaker.uasset",
+      "bytes": 5143,
+      "header": "00000000380A00002400000000000000",
+      "format": "IoStore-or-cooked",
+      "files": [
+        "Chameleon/Content/OnlineSystems/Matching/BP_Matchmaker.uasset"
+      ]
+    }
+  ]
+}
