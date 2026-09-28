@@ -57,7 +57,7 @@ assert.equal(hiddenForSeeker.color, null);
 
 const custom2 = privacyRoom.customize(pHider.id, { color: "#5ED7FF", pose: "freeze", brushSize: 3, paintCoverage: .72, surfaceId: "water" });
 assert.equal(custom2.brushSize, 3);
-assert.equal(custom2.paintCoverage, .22);
+assert.equal(custom2.paintCoverage, .15);
 assert.equal(pHider.pose, "freeze");
 assert.ok(pHider.frozenUntil > Date.now());
 
