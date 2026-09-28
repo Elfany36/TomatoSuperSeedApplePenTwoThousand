@@ -84,6 +84,17 @@ const hiderView = privacyRoom.stateFor(pHider.id);
 assert.equal(hiderView.clones.length, 1);
 
 privacyRoom.transitionToSearch();
+const clone=privacyRoom.allClones()[0];
+const seekerForClone=[...privacyRoom.players.values()].find(p=>p.role==="seeker");
+clone.x=seekerForClone.x;
+clone.z=seekerForClone.z-3;
+seekerForClone.yaw=Math.PI;
+const cloneSpot=privacyRoom.spot(seekerForClone.id,"clone:"+clone.id);
+assert.equal(cloneSpot.ok,true);
+assert.equal(cloneSpot.clone,true);
+assert.equal(privacyRoom.allClones().length,0);
+
+privacyRoom.transitionToSearch();
 const scanSeeker = [...privacyRoom.players.values()].find(p => p.role === "seeker");
 scanSeeker.lastAbilityAt = 0;
 for (const p of privacyRoom.players.values()) if (p.role === "hider") { p.x = scanSeeker.x + 3; p.z = scanSeeker.z; }
