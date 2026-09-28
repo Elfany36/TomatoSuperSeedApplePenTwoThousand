@@ -823,7 +823,19 @@ $("scanBtn")?.addEventListener("click", useAbility);
 $("tauntBtn")?.addEventListener("click", sendTaunt);
 $("brushTool")?.addEventListener("click",()=>{state.brushMode="brush";$("brushTool").classList.add("active");$("dropperTool").classList.remove("active")});
 $("dropperTool")?.addEventListener("click",()=>{state.brushMode="dropper";$("dropperTool").classList.add("active");$("brushTool").classList.remove("active")});
-document.querySelectorAll(".size-btn").forEach(button=>button.addEventListener("click",()=>{state.brushSize=Number(button.dataset.size)||1;document.querySelectorAll(".size-btn").forEach(b=>b.classList.remove("active"));button.classList.add("active")}));
+document.querySelectorAll(".size-btn").forEach(button=>button.addEventListener("click",()=>{
+  state.brushSize=Math.max(1,Math.min(5,Number(button.dataset.size)||1));
+  document.querySelectorAll(".size-btn").forEach(b=>b.classList.toggle("active",b===button));
+  toast("Brush size "+state.brushSize);
+}));
+document.querySelectorAll(".poses button").forEach(button=>button.addEventListener("click",()=>choosePose(button.dataset.pose)));
+$("customColor")?.addEventListener("input",e=>{
+  state.selectedColor=e.target.value.toUpperCase();
+  buildPalette(state.selectedColor);
+  const self=currentSelf();
+  if(self&&state.room?.phase==="setup") send({type:"customize",color:state.selectedColor,pose:self.pose,brushSize:state.brushSize,metallic:self.metallic??.03,roughness:self.roughness??.86,pattern:self.pattern||"solid",surfaceId:"palette"});
+});
+
 
 $("leaveBtn").addEventListener("click", () => {
   if (state.room) send({ type: "leave" });
