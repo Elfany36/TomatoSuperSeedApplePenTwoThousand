@@ -160,7 +160,10 @@ function handleMessage(message) {
   }
 
   if (message.type === "customized") {
-    toast("Painted " + message.surface.toLowerCase());
+    state.selectedColor = message.color || state.selectedColor;
+    state.brushSize = message.brushSize || state.brushSize;
+    buildPalette(state.selectedColor);
+    toast("Painted " + (message.surface || "surface").toLowerCase());
     playSampleSound();
     return;
   }
@@ -701,7 +704,12 @@ function buildPalette(selectedColor) {
     button.dataset.color = color;
     button.style.background = color;
     button.title = "Paint " + color;
-    button.addEventListener("click", () => send({ type: "customize", color, pose: currentSelf()?.pose || "stand", surfaceId: "palette" }));
+    button.addEventListener("click", () => {
+      state.selectedColor=color;
+      const self=currentSelf();
+      if(self) send({type:"customize",color,pose:self.pose||"stand",brushSize:state.brushSize,surfaceId:"palette"});
+      buildPalette(color);
+    });
     palette.appendChild(button);
   });
   for (const button of palette.children) button.classList.toggle("selected", button.dataset.color === selectedColor);
@@ -753,7 +761,10 @@ window.addEventListener("keydown", event => {
   if (event.code === "ControlLeft" || event.code === "ControlRight") choosePose("crouch");
   if (event.code === "KeyE") useAbility();
   if (event.code === "KeyQ") sendTaunt();
-  if (event.code === "KeyV") { state.cameraMode = state.cameraMode==="first" ? "third" : "first"; toast("Camera: "+state.cameraMode.toUpperCase()); }
+  if (event.code === "KeyV") {
+    state.cameraMode=state.cameraMode==="first"?"third":"first";
+    toast("Camera: "+state.cameraMode.toUpperCase());
+  }
   if (event.code === "KeyR") { state.input.yaw = currentSelf()?.role==="seeker" ? Math.PI : state.input.yaw; toast("Camera recentered"); }
 });
 window.addEventListener("keyup", event => { keys[event.code] = false; });
@@ -886,11 +897,10 @@ function spotAtPointer(event) {
   }
 }
 
-$("scene").addEventListener("pointerdown", event => {
-  if (event.button === 2) {
-    state.mouseLook = true;
-    initAudio();
-    return;
+$("scene").addEventListener("pointerdown",event=>{
+  if(event.button===2){state.mouseLook=true;initAudio();return;}
+  if(event.button===0 && currentSelf()?.role==="seeker" && state.room?.phase==="search"){
+    try{$("scene").requestPointerLock();}catch{}
   }
   initAudio();
   if (state.room?.phase === "setup" && currentSelf()?.role === "hider") sampleAtPointer(event);
@@ -903,10 +913,17 @@ window.addEventListener("pointerup", event => {
 window.addEventListener("contextmenu", event => {
   if (event.target === $("scene")) event.preventDefault();
 });
-window.addEventListener("pointermove", event => {
-  if (!state.mouseLook || !currentSelf()) return;
-  state.input.yaw += event.movementX * 0.006;
+window.addEventListener("pointermove",event=>{
+  if(!currentSelf()) return;
+  if(state.pointerLocked||state.mouseLook){
+    state.input.yaw+=event.movementX*0.0045;
+    state.pitch=Math.max(-1.1,Math.min(0.55,state.pitch-event.movementY*0.0032));
+  }
 });
+document.addEventListener("pointerlockchange",()=>{
+  state.pointerLocked=document.pointerLockElement===$("scene");
+});
+
 
 function pollGamepad() {
   const pads = navigator.getGamepads?.() || [];
@@ -968,16 +985,23 @@ function updateInput(nowTime) {
 }
 
 function updateCamera(dt) {
-  const self = currentSelf();
-  if (!self || !state.camera) return;
-  const yaw = self.yaw ?? state.input.yaw;
-  const hop = performance.now() < state.hopUntil ? Math.sin((performance.now()-(state.hopUntil-280))/280*Math.PI)*.2 : 0;
-  const backwardX = Math.sin(yaw) * 8.4;
-  const backwardZ = Math.cos(yaw) * 8.4;
-  const desired = new THREE.Vector3(self.x + backwardX, 6.4 + hop, self.z + backwardZ);
-  const smoothing = 1 - Math.pow(0.001, dt);
-  state.camera.position.lerp(desired, smoothing);
-  state.camera.lookAt(self.x, 1.0, self.z);
+  const self=currentSelf();
+  if(!self||!state.camera) return;
+  const yaw=self.yaw??state.input.yaw;
+  const hop=performance.now()<state.hopUntil?Math.sin((performance.now()-(state.hopUntil-280))/280*Math.PI)*.2:0;
+  const smoothing=1-Math.pow(0.001,dt);
+  if(self.role==="seeker" && state.cameraMode==="first"){
+    const cosPitch=Math.cos(state.pitch), sinPitch=Math.sin(state.pitch);
+    const lookX=Math.sin(yaw)*cosPitch, lookY=sinPitch, lookZ=Math.cos(yaw)*cosPitch;
+    const desired=new THREE.Vector3(self.x,1.58+hop*.4,self.z);
+    state.camera.position.lerp(desired,smoothing);
+    state.camera.lookAt(self.x+lookX*8,1.58+lookY*8,self.z+lookZ*8);
+    return;
+  }
+  const distance=self.role==="seeker"?6.2:7.4;
+  const desired=new THREE.Vector3(self.x+Math.sin(yaw)*distance,4.8+hop,self.z+Math.cos(yaw)*distance);
+  state.camera.position.lerp(desired,smoothing);
+  state.camera.lookAt(self.x,1.0,self.z);
 }
 
 function spawnSampleEffect(point, color) {
