@@ -57,7 +57,7 @@ const state = {
   assetCache: new Map(),
   mixers: [],
   mixerCache: new Map(),
-  adjustBrush: false
+  adjustBrush: false,
   hopUntil: 0,
   scanCooldownUntil: 0,
   cameraMode: "third",
