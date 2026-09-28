@@ -612,7 +612,7 @@ function updateRoom(room) {
   } else if (room.phase === "search") {
     $("centerPrompt").textContent = "Stay blended. Keep moving only when it helps.";
   } else if (room.phase === "results") {
-    $("centerPrompt").textContent = "Round finished — next round begins automatically.";
+    $("centerPrompt").textContent = host ? "Round complete — Play Again starts a fresh round." : "Round complete — waiting for the host to rematch.";
   } else {
     $("centerPrompt").textContent = host ? "Start the round when everyone is ready." : "Waiting for the host to start.";
   }
@@ -624,7 +624,7 @@ function updateRoom(room) {
   if (room.round !== state.lastRound) {
     state.lastRound = room.round;
     if (state.scene) loadMapForRound(room.round);
-    hideResults();
+    $("results").hidden = true;
   }
 
   if (previousPhase !== room.phase) {
@@ -687,7 +687,6 @@ function escapeHtml(value) {
   }[char]));
 }
 
-function MAP_KEYS_INDEX_FOR(id){const i=MAPS.findIndex(m=>m.id===id);return i+1;}
 function formatMs(ms) {
   const total = Math.max(0, Math.ceil(ms / 1000));
   const min = Math.floor(total / 60);
@@ -827,7 +826,6 @@ function sampleAtPointer(event) {
   }
   send({ type: "customize", color: state.selectedColor || color, pose: self.pose, brushSize: state.brushSize, surfaceId });
   spawnSampleEffect(hit.point,state.selectedColor||color);
-  spawnSampleEffect(hit.point, color);
 }
 
 function spotAtPointer(event) {
