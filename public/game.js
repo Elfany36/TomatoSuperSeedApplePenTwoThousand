@@ -1245,9 +1245,6 @@ $("scene").addEventListener("pointerdown",event=>{
     if(currentSelf()?.role==="hider" && state.room?.phase==="setup"){state.adjustBrush=true;initAudio();return;}
     state.mouseLook=true;initAudio();return;
   }
-  if(event.button===1 && currentSelf()?.role==="hider" && state.room?.phase==="setup" && state.paintModeOpen){
-    state.inspectLook=true; state.inspectMoved=false; initAudio(); return;
-  }
   if(event.button===0 && currentSelf()?.role==="seeker" && state.room?.phase==="search"){
     try{$("scene").requestPointerLock();}catch{}
   }
@@ -1381,7 +1378,7 @@ function updateInput(nowTime) {
 function updateCamera(dt) {
   const self=currentSelf();
   if(!self||!state.camera) return;
-  const yaw=self.yaw??state.input.yaw;
+  const yaw=self.id===state.selfId ? state.input.yaw : (self.yaw??state.input.yaw);
   const hop=performance.now()<state.hopUntil?Math.sin((performance.now()-(state.hopUntil-280))/280*Math.PI)*.2:0;
   const smoothing=1-Math.pow(0.001,dt);
   if(self.role==="seeker" && state.cameraMode==="first"){
