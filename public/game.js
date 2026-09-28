@@ -55,6 +55,7 @@ const state = {
   selectedColor: COLORS[0],
   assetKey: "grove",
   assetCache: new Map(),
+  mixers: [],
   hopUntil: 0,
   scanCooldownUntil: 0,
   cameraMode: "third",
@@ -348,24 +349,68 @@ function attachMap(root,key){
   toast(`${MAPS.find(m=>m.id===key)?.label||key} map ready`);
 }
 
+function playGltfAnimations(root, animations){
+  if(!animations?.length) return;
+  const mixer=new THREE.AnimationMixer(root);
+  for(const clip of animations){try{mixer.clipAction(clip).play();}catch{}}
+  state.mixers.push(mixer);
+}
+
 function loadMapForRound(round){
-  const key=MAPS[Math.max(0,(round||1)-1)%MAPS.length];
-  state.assetKey=key.id;
-  state.scene.background.set(key.sky);
-  state.scene.fog.color.set(key.sky);
-  $("mapLabel").textContent=key.label;
-  if(state.assetCache.has(key.id)){attachMap(state.assetCache.get(key.id),key.id);return}
-  if($("assetBtn"))$("assetBtn").innerHTML=`MAP <b>LOADING…</b>`;
-  new GLTFLoader().load(key.url,g=>{
-    state.assetCache.set(key.id,g.scene);
-    attachMap(g.scene,key.id);
-  },undefined,()=>{
+  const map=MAPS[Math.max(0,(round||1)-1)%MAPS.length];
+  state.assetKey=map.id;
+  state.scene.background.set(map.sky);
+  state.scene.fog.color.set(map.sky);
+  $("mapLabel").textContent=map.label;
+  const cached=state.assetCache.get(map.id);
+  if(cached){ playGltfAnimations(cached.scene,cached.animations); attachMap(cached.scene,map.id); return; }
+  if($("assetBtn"))$("assetBtn").innerHTML='<b>LOADING…</b>';
+  new GLTFLoader().load(map.url,g=>{
+    state.assetCache.set(map.id,{scene:g.scene,animations:g.animations||[]});
+    playGltfAnimations(g.scene,g.animations||[]);
+    attachMap(g.scene,map.id);
+    if($("bootStatus"))$("bootStatus").textContent=map.label+" environment loaded";
+  },xhr=>{
+    if($("bootStatus")&&xhr?.total)$("bootStatus").textContent=map.label+" "+Math.round(xhr.loaded/xhr.total*100)+"%";
+  },()=>{
     state.assetGroup.visible=false;
     state.worldGroup.visible=true;
     indexSampleMeshes(state.worldGroup);
-    toast(`${key.label} asset unavailable — using optimized fallback scene.`,3200);
-    if($("assetBtn"))$("assetBtn").innerHTML='MAP <b>FALLBACK</b>';
+    if($("bootStatus"))$("bootStatus").textContent=map.label+" fallback scene active";
+    toast(map.label+" asset unavailable — fallback scene active.",3200);
+    if($("assetBtn"))$("assetBtn").innerHTML='<b>FALLBACK</b>';
   });
+}
+
+function loadLocalMap(file){
+  if(!file||!state.scene) return;
+  const reader=new FileReader();
+  reader.onload=()=>{
+    const buffer=reader.result;
+    new GLTFLoader().parse(buffer,"/",g=>{
+      state.assetKey="local";
+      state.scene.background.set("#6E7E86");
+      state.scene.fog.color.set("#6E7E86");
+      state.assetGroup.clear();
+      const clone=g.scene.clone(true);
+      clone.traverse(o=>{if(o.isMesh)importAssetSurface(o)});
+      indexSampleMeshes(clone);
+      const box=new THREE.Box3().setFromObject(clone);
+      const size=box.getSize(new THREE.Vector3());
+      const center=box.getCenter(new THREE.Vector3());
+      const fit=Math.min(1.6,34/Math.max(1,size.x),25/Math.max(1,size.z));
+      clone.scale.setScalar(fit);
+      clone.position.set(-center.x*fit,-box.min.y*fit,-center.z*fit);
+      state.assetGroup.add(clone);
+      state.assetGroup.visible=true; state.worldGroup.visible=false;
+      playGltfAnimations(clone,g.animations||[]);
+      $("mapLabel").textContent=file.name.replace(/\.(glb|gltf)$/i,"").slice(0,16).toUpperCase();
+      $("assetBtn").innerHTML='<b>LOCAL</b>';
+      $("bootStatus").textContent="Local environment loaded";
+      toast("Local map loaded.");
+    },undefined,()=>toast("Could not read this GLB/GLTF.",3200));
+  };
+  reader.readAsArrayBuffer(file);
 }
 
 function buildWorld() {
@@ -868,6 +913,7 @@ $("roughnessSlider")?.addEventListener("input",e=>{const v=Number(e.target.value
 document.querySelectorAll(".pattern-btn").forEach(btn=>btn.addEventListener("click",()=>{state.pattern=btn.dataset.pattern;document.querySelectorAll(".pattern-btn").forEach(b=>b.classList.toggle("active",b===btn));const s=currentSelf();if(s&&state.room?.phase==="setup")send({type:"customize",color:s.color,pose:s.pose,brushSize:state.brushSize,metallic:s.metallic??.03,roughness:s.roughness??.86,pattern:state.pattern,surfaceId:"pattern"});}));
 $("cloneCreate")?.addEventListener("click",()=>send({type:"clone_create"}));
 $("cloneDelete")?.addEventListener("click",()=>send({type:"clone_delete"}));
+$("localMap")?.addEventListener("change",e=>loadLocalMap(e.target.files?.[0]));
 $("name").value = localStorage.getItem(NAME_KEY) || "";
 $("name").addEventListener("input", () => localStorage.setItem(NAME_KEY, $("name").value));
 
@@ -1269,6 +1315,7 @@ function frame(time) {
     if(self) updateMinimap(state.room,self);
   }
 
+  for(const mixer of state.mixers) mixer.update(dt);
   if (state.renderer && state.scene && state.camera) state.renderer.render(state.scene, state.camera);
 }
 
