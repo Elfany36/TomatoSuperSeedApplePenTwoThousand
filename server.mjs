@@ -364,31 +364,44 @@ export class GameRoom {
     return steps;
   }
 
-  spot(seekerId, targetId) {
-    const seeker = this.players.get(seekerId);
-    const target = this.players.get(targetId);
-    if (!seeker || !target) return { ok: false, reason: "missing" };
-    if (this.phase !== "search" || seeker.role !== "seeker") return { ok: false, reason: "phase" };
-    if (target.role !== "hider" || target.found) return { ok: false, reason: "target" };
-    if (now() - seeker.lastSpotAt < SPOT_COOLDOWN_MS) return { ok: false, reason: "cooldown" };
-    seeker.lastSpotAt = now();
+  spot(seekerId,targetId){
+    const seeker=this.players.get(seekerId);
+    if(!seeker) return {ok:false,reason:"missing"};
+    if(this.phase!=="search"||seeker.role!=="seeker") return {ok:false,reason:"phase"};
+    if(now()-seeker.lastSpotAt<SPOT_COOLDOWN_MS) return {ok:false,reason:"cooldown"};
+    seeker.lastSpotAt=now();
 
-    const dx = target.x - seeker.x;
-    const dz = target.z - seeker.z;
-    const distance = Math.hypot(dx, dz);
-    if (distance > SPOT_RANGE || !hasLineOfSight(seeker.x, seeker.z, target.x, target.z)) {
-      return { ok: false, reason: "out_of_range", x: target.x, z: target.z };
+    const raw=String(targetId||"");
+    if(raw.startsWith("clone:")){
+      const cloneId=raw.slice(6);
+      for(const owner of this.players.values()){
+        const index=(owner.clones||[]).findIndex(clone=>clone.id===cloneId);
+        if(index<0) continue;
+        const clone=owner.clones[index];
+        const dx=clone.x-seeker.x,dz=clone.z-seeker.z,distance=Math.hypot(dx,dz);
+        if(distance>SPOT_RANGE||!hasLineOfSight(seeker.x,seeker.z,clone.x,clone.z)) return {ok:false,reason:"out_of_range",x:clone.x,z:clone.z};
+        const forwardX=Math.sin(seeker.yaw),forwardZ=Math.cos(seeker.yaw);
+        const dot=(dx*forwardX+dz*forwardZ)/(distance||1);
+        if(dot<SPOT_MIN_DOT) return {ok:false,reason:"wrong_direction",x:clone.x,z:clone.z};
+        owner.clones.splice(index,1);
+        seeker.score+=1;
+        return {ok:true,x:clone.x,z:clone.z,targetId:raw,clone:true};
+      }
+      return {ok:false,reason:"missing"};
     }
 
-    const forwardX = Math.sin(seeker.yaw);
-    const forwardZ = Math.cos(seeker.yaw);
-    const dot = (dx * forwardX + dz * forwardZ) / (distance || 1);
-    if (dot < SPOT_MIN_DOT) return { ok: false, reason: "wrong_direction", x: target.x, z: target.z };
-
-    target.found = true;
-    seeker.score += 3;
+    const target=this.players.get(raw);
+    if(!target) return {ok:false,reason:"missing"};
+    if(target.role!=="hider"||target.found) return {ok:false,reason:"target"};
+    const dx=target.x-seeker.x,dz=target.z-seeker.z,distance=Math.hypot(dx,dz);
+    if(distance>SPOT_RANGE||!hasLineOfSight(seeker.x,seeker.z,target.x,target.z)) return {ok:false,reason:"out_of_range",x:target.x,z:target.z};
+    const forwardX=Math.sin(seeker.yaw),forwardZ=Math.cos(seeker.yaw);
+    const dot=(dx*forwardX+dz*forwardZ)/(distance||1);
+    if(dot<SPOT_MIN_DOT) return {ok:false,reason:"wrong_direction",x:target.x,z:target.z};
+    target.found=true;
+    seeker.score+=3;
     this.checkWinConditions();
-    return { ok: true, x: target.x, z: target.z, targetId: target.id };
+    return {ok:true,x:target.x,z:target.z,targetId:target.id};
   }
 
   customize(playerId, msg) {
