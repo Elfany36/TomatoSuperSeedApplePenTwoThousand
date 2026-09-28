@@ -68,6 +68,16 @@
           <button id="brushTool" class="tool active">🖌 Brush</button>
           <button id="dropperTool" class="tool">💧 Eye Drop</button>
         </div>
+        <div class="paint-tuning">
+          <label><span>METALLIC <b id="metallicValue">3%</b></span><input id="metallicSlider" type="range" min="0" max="100" value="3"></label>
+          <label><span>ROUGHNESS <b id="roughnessValue">86%</b></span><input id="roughnessSlider" type="range" min="5" max="100" value="86"></label>
+        </div>
+        <div class="pattern-row">
+          <button class="pattern-btn active" data-pattern="solid">SOLID</button>
+          <button class="pattern-btn" data-pattern="edge">EDGE</button>
+          <button class="pattern-btn" data-pattern="bands">BANDS</button>
+          <button class="pattern-btn" data-pattern="dither">DITHER</button>
+        </div>
         <div class="size-row">
           <button class="size-btn active" data-size="1">S · 1</button>
           <button class="size-btn" data-size="2">M · 2</button>
@@ -80,6 +90,14 @@
           <button data-pose="crouch">2 · Crouch</button>
           <button data-pose="curl">3 · Curl</button>
           <button data-pose="freeze">4 · Freeze</button>
+          <button data-pose="prone">R · Prone</button>
+          <button data-pose="wallflat">F · Wall</button>
+          <button data-pose="lean">Q · Lean</button>
+          <button data-pose="slant">E · Slant</button>
+        </div>
+        <div class="clone-row">
+          <button id="cloneCreate" class="tool">✚ Decoy Clone</button>
+          <button id="cloneDelete" class="tool">✕ Clear Clones</button>
         </div>
         <small>Click the scenery while in Brush mode to paint toward the selected color. Eye Drop copies the color under your cursor.</small>
       </div>
