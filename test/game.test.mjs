@@ -61,6 +61,28 @@ assert.equal(custom2.paintCoverage, .15);
 assert.equal(pHider.pose, "freeze");
 assert.ok(pHider.frozenUntil > Date.now());
 
+privacyRoom.phase = "setup";
+const materialPose = privacyRoom.customize(pHider.id, {
+  color: "#5ED7FF",
+  pose: "tpose",
+  brushSize: 5,
+  metallic: 0.72,
+  roughness: 0.24,
+  pattern: "bands",
+  surfaceId: "paint"
+});
+assert.equal(materialPose.pose, "tpose");
+assert.equal(pHider.brushSize, 5);
+assert.equal(pHider.metallic, 0.72);
+assert.equal(pHider.roughness, 0.24);
+assert.equal(pHider.pattern, "bands");
+
+const cloneResult = privacyRoom.createClone(pHider.id);
+assert.equal(cloneResult.ok, true);
+assert.equal(privacyRoom.allClones().length, 1);
+const hiderView = privacyRoom.stateFor(pHider.id);
+assert.equal(hiderView.clones.length, 1);
+
 privacyRoom.transitionToSearch();
 const scanSeeker = [...privacyRoom.players.values()].find(p => p.role === "seeker");
 scanSeeker.lastAbilityAt = 0;
