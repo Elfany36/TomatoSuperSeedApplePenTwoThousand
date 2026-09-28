@@ -196,7 +196,7 @@ function handleMessage(message) {
     $("game").hidden = false;
     ensureScene();
     updateRoom(message.room);
-    if(message.room?.round && state.scene) loadMapForRound(message.room.round);
+    if(message.room?.mapId && state.scene) loadMapForRound({mapId:message.room.mapId});
     toast(message.type === "reconnected" ? "Reconnected to your round." : "Joined room " + message.room.code);
     return;
   }
@@ -848,6 +848,10 @@ function updateRoom(room) {
     : "LOBBY";
   $("score").textContent = self.score;
   $("timer").textContent = formatMs(room.leftMs);
+  if(room.mapId && room.mapId!==state.assetKey && room.mapId!=="local"){
+    state.assetKey=room.mapId;
+    if(state.scene) loadMapForRound({mapId:room.mapId});
+  }
   const coach=room.aiCoach;
   if(coach){
     $("aiTitle").textContent=coach.title||"AI DIRECTOR";
@@ -1106,12 +1110,14 @@ $("playAgain")?.addEventListener("click", () => {
 });
 
 $("assetBtn")?.addEventListener("click",()=>{
+  const room=state.room;
   const index=Math.max(0,MAPS.findIndex(m=>m.id===state.assetKey));
   const next=MAPS[(index+1)%MAPS.length];
-  state.assetKey=next.id;
-  ensureScene();
-  loadMapForRound({mapId:next.id});
-  toast("Loading "+next.label+"…",1600);
+  if(room && room.phase!=="lobby"){toast("Map selection is locked after the round starts.",1800);return;}
+  if(room && room.hostId!==state.selfId){toast("Only the host can change the map.",1800);return;}
+  if(room) send({type:"map_select",mapId:next.id});
+  else { state.assetKey=next.id; ensureScene(); loadMapForRound({mapId:next.id}); }
+  toast("Map: "+next.label,1600);
 });
 $("metallicSlider")?.addEventListener("input",e=>{const v=Number(e.target.value)/100;$("metallicValue").textContent=Math.round(v*100)+"%";const s=currentSelf();if(s&&state.room?.phase==="setup")send({type:"customize",color:s.color,pose:s.pose,brushSize:state.brushSize,metallic:v,roughness:s.roughness??.86,pattern:s.pattern||"solid",surfaceId:"material"});});
 $("roughnessSlider")?.addEventListener("input",e=>{const v=Number(e.target.value)/100;$("roughnessValue").textContent=Math.round(v*100)+"%";const s=currentSelf();if(s&&state.room?.phase==="setup")send({type:"customize",color:s.color,pose:s.pose,brushSize:state.brushSize,metallic:s.metallic??.03,roughness:v,pattern:s.pattern||"solid",surfaceId:"material"});});
