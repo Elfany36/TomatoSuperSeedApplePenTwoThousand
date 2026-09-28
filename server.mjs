@@ -205,10 +205,15 @@ export class GameRoom {
       p.found = false;
       p.color = "#FFFFFF";
       p.pose = "stand";
-      p.input = { x: 0, z: 0 };
+      p.brushSize = 1;
+      p.paintCoverage = 0;
+      p.input = { x: 0, z: 0, sprint: false };
       p.lastInputAt = now();
       p.lastSpotAt = 0;
+      p.lastAbilityAt = 0;
       p.lastStepAt = 0;
+      p.revealedUntil = 0;
+      p.frozenUntil = 0;
       p.yaw = p.role === "seeker" ? Math.PI : 0;
       const spawn = spawns[index % spawns.length];
       p.x = p.role === "seeker" ? spawn[0] * 0.55 : spawn[0] * 0.88;
@@ -299,8 +304,11 @@ export class GameRoom {
       const ix = clamp(p.input.x, -1, 1);
       const iz = clamp(p.input.z, -1, 1);
       const len = Math.hypot(ix, iz) || 1;
-      const dx = ix / len * MOVE_SPEED * dt;
-      const dz = iz / len * MOVE_SPEED * dt;
+      const poseMult = p.pose === "curl" ? 0.48 : p.pose === "crouch" ? 0.62 : p.pose === "freeze" ? 0 : 1;
+      const sprintMult = p.input.sprint && p.pose === "stand" ? 1.38 : 1;
+      const speed = MOVE_SPEED * poseMult * sprintMult;
+      const dx = ix / len * speed * dt;
+      const dz = iz / len * speed * dt;
       if (Math.abs(dx) + Math.abs(dz) < 0.001) continue;
 
       let nx = p.x + dx;
@@ -350,8 +358,12 @@ export class GameRoom {
     if (typeof msg.color === "string" && /^#[0-9a-f]{6}$/i.test(msg.color)) p.color = msg.color.toUpperCase();
     if (["stand", "crouch", "curl"].includes(msg.pose)) p.pose = msg.pose;
     p.blendScore = rgbBlendScore(p.color, p.x, p.z).score;
+    if (Number.isFinite(Number(msg.brushSize))) p.brushSize = clamp(Math.round(Number(msg.brushSize)), 1, 3);
+    if (Number.isFinite(Number(msg.paintCoverage))) p.paintCoverage = clamp(Number(msg.paintCoverage), 0, 1);
+    if (msg.pose === "freeze") p.frozenUntil = now() + 2200;
+    p.blendScore = rgbBlendScore(p.color, p.x, p.z).score;
     const sample = SURFACES.find(s => s.id === msg.surfaceId);
-    return { ok: true, color: p.color, pose: p.pose, surface: sample?.name ?? "Painted" };
+    return { ok: true, color: p.color, pose: p.pose, brushSize: p.brushSize, paintCoverage: p.paintCoverage, surface: sample?.name ?? "Painted" };
   }
 
   stateFor(viewerId) {
@@ -366,12 +378,22 @@ export class GameRoom {
         found: p.found,
         pose: p.pose,
         color: p.color,
-        blendScore: p.blendScore
+        blendScore: p.blendScore,
+        brushSize: p.brushSize,
+        paintCoverage: p.paintCoverage
       };
       const revealAll = this.phase === "results" || this.phase === "lobby";
       const revealSelf = viewerId === p.id;
       const revealTeam = viewer && viewer.role === p.role;
-      const revealSearchTarget = this.phase === "search";
+      let revealSearchTarget = false;
+      if (this.phase === "search" && viewer?.role === "seeker" && p.role === "hider") {
+        if (p.found || p.revealedUntil > now()) {
+          revealSearchTarget = true;
+        } else {
+          const distance = Math.hypot(p.x - viewer.x, p.z - viewer.z);
+          revealSearchTarget = distance <= 10 && hasLineOfSight(viewer.x, viewer.z, p.x, p.z);
+        }
+      }
       if (revealAll || revealSelf || revealTeam || revealSearchTarget) {
         return { ...base, x: p.x, z: p.z, yaw: p.yaw };
       }
@@ -414,15 +436,20 @@ export class GameManager {
       yaw: 0,
       color: "#FFFFFF",
       pose: "stand",
+      brushSize: 1,
+      paintCoverage: 0,
       blendScore: 8,
       found: false,
+      revealedUntil: 0,
+      frozenUntil: 0,
       connected: false,
       disconnectedAt: 0,
       joinOrder: 0,
       ws: null,
-      input: { x: 0, z: 0 },
+      input: { x: 0, z: 0, sprint: false },
       lastInputAt: 0,
       lastSpotAt: 0,
+      lastAbilityAt: 0,
       lastStepAt: 0
     };
   }
@@ -621,7 +648,8 @@ export class GameManager {
     if (parsed.type === "input") {
       current.input = {
         x: clamp(Number(parsed.x) || 0, -1, 1),
-        z: clamp(Number(parsed.z) || 0, -1, 1)
+        z: clamp(Number(parsed.z) || 0, -1, 1),
+        sprint: !!parsed.sprint
       };
       if (Number.isFinite(Number(parsed.yaw))) current.yaw = Number(parsed.yaw);
       current.lastInputAt = now();
@@ -635,6 +663,32 @@ export class GameManager {
       } else {
         this.send(current, { type: "customized", ...result });
         this.broadcastRoom(room);
+      }
+      return;
+    }
+
+    if (parsed.type === "ability") {
+      const room = this.rooms.get(current.roomCode);
+      if (!room) return;
+      const ability = String(parsed.ability || "");
+      if (ability === "scan") {
+        if (room.phase !== "search" || current.role !== "seeker") return;
+        if (now() - current.lastAbilityAt < 6500) return;
+        current.lastAbilityAt = now();
+        const duration = 2200;
+        for (const p of room.players.values()) {
+          if (p.role !== "hider" || p.found) continue;
+          if (Math.hypot(p.x - current.x, p.z - current.z) <= 14) p.revealedUntil = now() + duration;
+        }
+        for (const viewer of room.connectedPlayers()) {
+          this.send(viewer, { type: "scan_effect", x: current.x, z: current.z });
+        }
+        this.broadcastRoom(room);
+      } else if (ability === "taunt") {
+        if (!current.roomCode) return;
+        for (const viewer of room.connectedPlayers()) {
+          this.send(viewer, { type: "taunt_effect", x: current.x, z: current.z, name: current.name });
+        }
       }
       return;
     }
