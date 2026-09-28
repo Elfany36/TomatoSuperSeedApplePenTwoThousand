@@ -74,7 +74,9 @@ const state = {
   frameSamples: [],
   lastPerfHud: 0,
   ping: 0,
-  pingTimer: null
+  pingTimer: null,
+  painting: false,
+  lastPaintAt: 0
 };
 
 function apiSocketUrl() {
@@ -1092,12 +1094,16 @@ $("scene").addEventListener("pointerdown",event=>{
   if(event.button===0 && currentSelf()?.role==="seeker" && state.room?.phase==="search"){
     try{$("scene").requestPointerLock();}catch{}
   }
+  if(event.button===0 && currentSelf()?.role==="hider" && state.room?.phase==="setup"){
+    state.painting=true;
+  }
   initAudio();
   if (state.room?.phase === "setup" && currentSelf()?.role === "hider") sampleAtPointer(event);
   if (state.room?.phase === "search" && currentSelf()?.role === "seeker") spotAtPointer(event);
 });
 
 window.addEventListener("pointerup",event=>{
+  if(event.button===0) state.painting=false;
   if(event.button===2){state.adjustBrush=false;state.mouseLook=false;}
 });
 $("scene").addEventListener("wheel",event=>{
@@ -1123,6 +1129,10 @@ window.addEventListener("pointermove",event=>{
   if(state.pointerLocked||state.mouseLook){
     state.input.yaw+=event.movementX*0.0045;
     state.pitch=Math.max(-1.1,Math.min(0.55,state.pitch-event.movementY*0.0032));
+  }
+  if(state.painting && currentSelf()?.role==="hider" && state.room?.phase==="setup" && state.brushMode==="brush" && performance.now()-state.lastPaintAt>120){
+    state.lastPaintAt=performance.now();
+    sampleAtPointer(event);
   }
 });
 document.addEventListener("pointerlockchange",()=>{
