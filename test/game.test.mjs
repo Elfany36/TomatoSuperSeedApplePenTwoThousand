@@ -100,3 +100,20 @@ scanSeeker.lastAbilityAt = 0;
 for (const p of privacyRoom.players.values()) if (p.role === "hider") { p.x = scanSeeker.x + 3; p.z = scanSeeker.z; }
 assert.ok([...privacyRoom.players.values()].some(p => p.role === "hider"));
 console.log("extended room, privacy, camouflage and ability state checks passed");
+
+
+const movementRoom = new GameRoom("MOVE01", false);
+movementRoom.addPlayer(gm.makePlayer("m0", "Mover"));
+movementRoom.addPlayer(gm.makePlayer("m1", "Mover2"));
+movementRoom.startRound();
+const mover = [...movementRoom.players.values()].find(p => p.role === "hider");
+const beforeX = mover.x;
+mover.input = { x: 1, z: 0, sprint: true };
+movementRoom.update(0.25);
+assert.ok(mover.x !== beforeX);
+assert.ok(mover.stamina < 100);
+mover.input = { x: 0, z: 0, sprint: false };
+movementRoom.update(1);
+assert.ok(mover.stamina > 0);
+assert.ok(mover.stamina <= 100);
+console.log("authoritative acceleration/stamina checks passed");
