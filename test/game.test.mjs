@@ -87,7 +87,7 @@ privacyRoom.transitionToSearch();
 const clone=privacyRoom.allClones()[0];
 const seekerForClone=[...privacyRoom.players.values()].find(p=>p.role==="seeker");
 clone.x=seekerForClone.x;
-clone.z=seekerForClone.z-3;
+clone.z=seekerForClone.z-0.75;
 seekerForClone.yaw=Math.PI;
 const cloneSpot=privacyRoom.spot(seekerForClone.id,"clone:"+clone.id);
 assert.equal(cloneSpot.ok,true);
