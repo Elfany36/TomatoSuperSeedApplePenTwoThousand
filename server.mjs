@@ -401,6 +401,9 @@ export class GameRoom {
       if (revealAll || revealSelf || revealTeam || revealSearchTarget) {
         return { ...base, x: p.x, z: p.z, yaw: p.yaw };
       }
+      if (viewer?.role === "seeker" && p.role === "hider") {
+        return { ...base, color: null, blendScore: null, brushSize: null, paintCoverage: null, pose: null, x: null, z: null, yaw: 0 };
+      }
       return { ...base, x: null, z: null, yaw: 0 };
     });
 
