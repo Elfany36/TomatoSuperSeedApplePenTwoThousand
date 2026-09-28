@@ -117,3 +117,17 @@ movementRoom.update(1);
 assert.ok(mover.stamina > 0);
 assert.ok(mover.stamina <= 100);
 console.log("authoritative acceleration/stamina checks passed");
+
+const aiRoom = new GameRoom("AI01", false);
+aiRoom.addPlayer(gm.makePlayer("ai0", "AI Hider"));
+aiRoom.addPlayer(gm.makePlayer("ai1", "AI Seeker"));
+aiRoom.startRound();
+const aiHider=[...aiRoom.players.values()].find(p=>p.role==="hider");
+const aiSeeker=[...aiRoom.players.values()].find(p=>p.role==="seeker");
+const setupCoach=aiRoom.stateFor(aiHider.id).aiCoach;
+assert.equal(typeof setupCoach.hint,"string");
+assert.ok(setupCoach.confidence>0);
+aiRoom.transitionToSearch();
+const seekerCoach=aiRoom.stateFor(aiSeeker.id).aiCoach;
+assert.equal(typeof seekerCoach.hint,"string");
+console.log("adaptive AI coach checks passed");
