@@ -360,11 +360,16 @@ export class GameRoom {
     const p = this.players.get(playerId);
     if (!p || this.phase !== "setup" || p.role !== "hider") return { ok: false, reason: "not_allowed" };
     if (typeof msg.color === "string" && /^#[0-9a-f]{6}$/i.test(msg.color)) p.color = msg.color.toUpperCase();
-    if (["stand", "crouch", "curl", "freeze"].includes(msg.pose)) p.pose = msg.pose;
-    p.blendScore = rgbBlendScore(p.color, p.x, p.z).score;
+    if (["stand", "crouch", "curl", "freeze"].includes(msg.pose)) {
+      p.pose = msg.pose;
+      p.frozenUntil = msg.pose === "freeze" ? now() + 2200 : 0;
+    }
     if (Number.isFinite(Number(msg.brushSize))) p.brushSize = clamp(Math.round(Number(msg.brushSize)), 1, 3);
-    if (Number.isFinite(Number(msg.paintCoverage))) p.paintCoverage = clamp(Number(msg.paintCoverage), 0, 1);
-    if (msg.pose === "freeze") p.frozenUntil = now() + 2200;
+    const isPaintStroke = typeof msg.color === "string" && msg.surfaceId !== "pose" && msg.surfaceId !== "freeze";
+    if (isPaintStroke) {
+      const gain = [0, 0.10, 0.16, 0.22][p.brushSize] || 0.10;
+      p.paintCoverage = clamp(p.paintCoverage + gain, 0, 1);
+    }
     p.blendScore = rgbBlendScore(p.color, p.x, p.z).score;
     const sample = SURFACES.find(s => s.id === msg.surfaceId);
     return { ok: true, color: p.color, pose: p.pose, brushSize: p.brushSize, paintCoverage: p.paintCoverage, surface: sample?.name ?? "Painted" };
