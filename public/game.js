@@ -535,17 +535,26 @@ function makePlayerMesh(player) {
 
   const legs = group.children.filter(o => o.geometry?.type === "CylinderGeometry");
   state.playerGroup.add(group);
-  return {group,mats:[bodyMat,head.material,tail.material],accent,band,target:new THREE.Vector3(player.x||0,0,player.z||0),
+  const entry={group,mats:[bodyMat,head.material,tail.material],accent,band,target:new THREE.Vector3(player.x||0,0,player.z||0),
     lastX:player.x||0,lastZ:player.z||0,body,head,tail,legs};
+  state.players.set(player.id, entry);
+  return entry;
 }
 
 function setPlayerStyle(entry, player) {
   const color = player.role==="seeker" ? "#8E7CFF" : (player.color||"#FFFFFF");
-  entry.mats.forEach(mat=>mat.color.set(color));
+  entry.mats.forEach(mat=>{
+    mat.color.set(color);
+    if(player.metallic!=null) mat.metalness=player.metallic;
+    if(player.roughness!=null) mat.roughness=player.roughness;
+  });
   entry.accent.color.set(player.role==="seeker" ? "#CEC7FF" : "#DDEBE6");
   entry.band.material.color.set(player.found ? "#FF667D" : player.role==="seeker" ? "#FFD166" : "#65E6BA");
-  entry.group.scale.y=player.pose==="crouch"?.72:player.pose==="curl"?.56:player.pose==="freeze"?.48:1;
-  entry.group.rotation.z=player.pose==="curl"?.16:0;
+  const pose=player.pose||"stand";
+  entry.group.scale.set(1, pose==="crouch"?.72:pose==="curl"?.56:pose==="freeze"?.48:pose==="prone"?.42:1, pose==="prone"?1.15:1);
+  entry.group.rotation.z=pose==="curl"?.16:pose==="lean"?.22:pose==="slant"?-.18:0;
+  entry.group.rotation.x=pose==="backbend"?-.28:0;
+  entry.group.position.y=pose==="wallflat"?.2:0;
 }
 
 function animatePlayer(entry, player, time){
@@ -564,9 +573,10 @@ function animatePlayer(entry, player, time){
 }
 
 function updatePlayers(room) {
-  const liveIds = new Set(room.players.map(p => p.id));
+  const entities=[...room.players,...(room.clones||[])];
+  const liveIds = new Set(entities.map(p => p.id));
 
-  for (const player of room.players) {
+  for (const player of entities) {
     let entry = state.players.get(player.id);
     if (!entry) {
       makePlayerMesh(player);
@@ -586,7 +596,9 @@ function updatePlayers(room) {
 
     const isSelf = player.id === state.selfId;
     const isHiderInSetup = room.phase === "setup" && player.role === "hider";
-    entry.group.renderOrder = isSelf ? 3 : isHiderInSetup ? 2 : 1;
+    const isClone=String(player.id).startsWith("clone:");
+    entry.group.renderOrder = isSelf ? 3 : isClone ? 2 : isHiderInSetup ? 2 : 1;
+    if(isClone) entry.group.scale.multiplyScalar(.94);
     entry.group.visible = entry.group.visible && !(isSelf && player.role === "seeker" && state.cameraMode === "first");
     entry.group.traverse(obj => {
       if (obj.material) obj.material.depthWrite = true;
@@ -632,6 +644,16 @@ function updateRoom(room) {
   $("camoPanel").hidden = !(room.phase === "setup" && self.role === "hider");
   $("seekerPanel").hidden = !(room.phase === "search" && self.role === "seeker");
   $("crosshair").hidden = !(room.phase === "search" && self.role === "seeker");
+  if($("cloneCreate")) $("cloneCreate").disabled=!(room.phase==="setup"&&self.role==="hider");
+  if($("cloneDelete")) $("cloneDelete").disabled=!(room.phase==="setup"&&self.role==="hider");
+  if($("metallicSlider")){
+    $("metallicSlider").value=Math.round((self.metallic??.03)*100);
+    $("metallicValue").textContent=Math.round((self.metallic??.03)*100)+"%";
+  }
+  if($("roughnessSlider")){
+    $("roughnessSlider").value=Math.round((self.roughness??.86)*100);
+    $("roughnessValue").textContent=Math.round((self.roughness??.86)*100)+"%";
+  }
 
   if (room.phase === "setup" && self.role === "hider") {
     $("centerPrompt").textContent = "Click a colorful surface to paint · 1/2/3 pose · explore and hide";
@@ -764,7 +786,12 @@ window.addEventListener("keydown", event => {
   if (event.code === "Digit2") choosePose("crouch");
   if (event.code === "Digit3") choosePose("curl");
   if (event.code === "Digit4") choosePose("freeze");
-  if (event.code === "Space") { state.hopUntil=performance.now()+280; initAudio(); }
+  if (event.code === "KeyR") cyclePose();
+  if (event.code === "Space") {
+    initAudio();
+    if(currentSelf()?.role==="hider" && state.room?.phase==="setup") sampleCenterSurface();
+    else state.hopUntil=performance.now()+280;
+  }
   if (event.code === "ControlLeft" || event.code === "ControlRight") choosePose("crouch");
   if (event.code === "KeyE") useAbility();
   if (event.code === "KeyQ") sendTaunt();
@@ -805,6 +832,11 @@ $("playAgain")?.addEventListener("click", () => {
 });
 
 $("assetBtn")?.addEventListener("click",()=>toast("Map rotation is synchronized to the round."));
+$("metallicSlider")?.addEventListener("input",e=>{const v=Number(e.target.value)/100;$("metallicValue").textContent=Math.round(v*100)+"%";const s=currentSelf();if(s&&state.room?.phase==="setup")send({type:"customize",color:s.color,pose:s.pose,brushSize:state.brushSize,metallic:v,roughness:s.roughness??.86,pattern:s.pattern||"solid",surfaceId:"material"});});
+$("roughnessSlider")?.addEventListener("input",e=>{const v=Number(e.target.value)/100;$("roughnessValue").textContent=Math.round(v*100)+"%";const s=currentSelf();if(s&&state.room?.phase==="setup")send({type:"customize",color:s.color,pose:s.pose,brushSize:state.brushSize,metallic:s.metallic??.03,roughness:v,pattern:s.pattern||"solid",surfaceId:"material"});});
+document.querySelectorAll(".pattern-btn").forEach(btn=>btn.addEventListener("click",()=>{state.pattern=btn.dataset.pattern;document.querySelectorAll(".pattern-btn").forEach(b=>b.classList.toggle("active",b===btn));const s=currentSelf();if(s&&state.room?.phase==="setup")send({type:"customize",color:s.color,pose:s.pose,brushSize:state.brushSize,metallic:s.metallic??.03,roughness:s.roughness??.86,pattern:state.pattern,surfaceId:"pattern"});}));
+$("cloneCreate")?.addEventListener("click",()=>send({type:"clone_create"}));
+$("cloneDelete")?.addEventListener("click",()=>send({type:"clone_delete"}));
 $("name").value = localStorage.getItem(NAME_KEY) || "";
 $("name").addEventListener("input", () => localStorage.setItem(NAME_KEY, $("name").value));
 
@@ -872,8 +904,20 @@ function sampleAtPointer(event) {
     playSampleSound();
     return;
   }
-  send({ type: "customize", color: state.selectedColor || color, pose: self.pose, brushSize: state.brushSize, surfaceId });
+  send({ type: "customize", color: state.selectedColor || color, pose: self.pose, brushSize: state.brushSize, metallic:self.metallic??.03, roughness:self.roughness??.86, pattern:self.pattern||"solid", surfaceId });
   spawnSampleEffect(hit.point,state.selectedColor||color);
+}
+
+function sampleCenterSurface(){
+  const self=currentSelf(); if(!self||self.role!=="hider"||state.room?.phase!=="setup") return;
+  const ray=new THREE.Raycaster(); ray.setFromCamera(new THREE.Vector2(0,0),state.camera);
+  const hit=ray.intersectObjects(state.sampleMeshes,true).find(x=>x.object.userData?.sampleColor);
+  if(hit){
+    const color=hit.object.userData.sampleColor||"#FFFFFF";
+    state.selectedColor=color; buildPalette(color);
+    $("camoSurface").textContent=hit.object.userData.surfaceName||"Surface";
+    playSampleSound(); toast("3D Eye Dropper: "+(hit.object.userData.surfaceName||"Surface"));
+  }
 }
 
 function spotAtPointer(event) {
@@ -917,6 +961,14 @@ $("scene").addEventListener("pointerdown",event=>{
 window.addEventListener("pointerup", event => {
   if (event.button === 2) state.mouseLook = false;
 });
+$("scene").addEventListener("wheel",event=>{
+  if(currentSelf()?.role==="hider" && state.room?.phase==="setup"){
+    state.brushSize=Math.max(1,Math.min(5,state.brushSize+(event.deltaY>0?-1:1)));
+    document.querySelectorAll(".size-btn").forEach(b=>b.classList.toggle("active",Number(b.dataset.size)===state.brushSize));
+    toast("Brush size: "+state.brushSize);
+    event.preventDefault();
+  }
+},{passive:false});
 window.addEventListener("contextmenu", event => {
   if (event.target === $("scene")) event.preventDefault();
 });
