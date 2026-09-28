@@ -395,7 +395,7 @@ export class GameRoom {
     const p = this.players.get(playerId);
     if (!p || this.phase !== "setup" || p.role !== "hider") return { ok: false, reason: "not_allowed" };
     if (typeof msg.color === "string" && /^#[0-9a-f]{6}$/i.test(msg.color)) p.color = msg.color.toUpperCase();
-    if (["stand", "crouch", "curl", "freeze", "prone", "wallflat", "lean", "backbend", "slant"].includes(msg.pose)) {
+    if (["stand", "crouch", "curl", "freeze", "prone", "wallflat", "lean", "backbend", "slant", "tpose", "armsup", "armsfwd", "legsout", "star", "starfish", "lieflat", "ball", "sit"].includes(msg.pose)) {
       p.pose = msg.pose;
       p.frozenUntil = msg.pose === "freeze" ? now() + 2200 : 0;
       p.attached = msg.pose === "wallflat";
